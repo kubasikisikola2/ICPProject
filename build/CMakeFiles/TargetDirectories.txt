@@ -1,3 +1,0 @@
-C:/Users/kubas/Documents/ICPProjects/ICPProject1/build/CMakeFiles/ICPProject1.dir
-C:/Users/kubas/Documents/ICPProjects/ICPProject1/build/CMakeFiles/edit_cache.dir
-C:/Users/kubas/Documents/ICPProjects/ICPProject1/build/CMakeFiles/rebuild_cache.dir
