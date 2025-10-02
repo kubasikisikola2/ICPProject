@@ -15,6 +15,7 @@ find_package(glew CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(TBB REQUIRED) #Comment out if causes problems, Libor needs it on Linux
 
 if(WIN32)
     #This I can't get to work on Windows; VS seems to require a properly set up solution/project and I can't get VSCode to work either
@@ -35,6 +36,7 @@ target_link_libraries(ICPProject1 PRIVATE
     glm::glm
     nlohmann_json::nlohmann_json
     ${OpenCV_LIBS}
+    TBB::tbb
 )
 
 target_include_directories(ICPProject1 PRIVATE
