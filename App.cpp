@@ -1,4 +1,7 @@
 #include <iostream>
+#include <numeric>
+#include <execution>
+#include <opencv2/core/types.hpp>
 
 #include "App.hpp"
 
@@ -12,15 +15,25 @@ App::App()
 bool App::init()
 {
     try {
-        // initialization code
-        //...
+        //open first available camera, using any API available (autodetect) 
+        capture = cv::VideoCapture(0, cv::CAP_ANY);
+    
+        //open video file
+        //capture = cv::VideoCapture("video.mkv");
 
-        // some init
-        // if (not_success)
-        //  throw std::runtime_error("something went bad");
+        if (!capture.isOpened())
+        { 
+            throw("Couldn't open capture!");
+        }
+        else
+        {
+            std::cout << "Source: " << 
+                ": width=" << capture.get(cv::CAP_PROP_FRAME_WIDTH) <<
+                ", height=" << capture.get(cv::CAP_PROP_FRAME_HEIGHT) << '\n';
+        }
     }
     catch (std::exception const& e) {
-        std::cerr << "Init failed : " << e.what() << std::endl;
+        std::cerr << "App init failed : " << e.what() << std::endl;
         throw;
     }
     std::cout << "Initialized...\n";
@@ -29,9 +42,45 @@ bool App::init()
 
 int App::run(void)
 {
+    /*
+    cv::Mat frame, scene;
+    cv::Point2f center;
+
+    while (1)
+    {
+        capture.read(frame);
+        if (frame.empty())
+        {
+            std::cerr << "Cam disconnected? End of file?\n";
+            break;
+        }
+
+        // show grabbed frame
+        cv::imshow("grabbed", frame);
+
+        // WARNING: the original image MUST NOT be modified. If you want to draw into image,
+        // do your own COPY!
+
+        // analyze the image...
+        center = find_object_chroma(frame);
+
+        // make a copy and draw center
+        cv::Mat scene_cross;
+        frame.copyTo(scene_cross);
+        draw_cross_normalized(scene_cross, center, 30);
+        cv::imshow("scene", scene_cross);
+
+        if (cv::waitKey(1) == 27)
+            break;
+    }
+
+    return EXIT_SUCCESS;
+    */
+
+    cv::Mat frame;
     try {
         // read image
-        cv::Mat frame = cv::imread("../resources/lightbulb.jpg");  //can be JPG,PNG,GIF,TIFF,...
+        cv::Mat frame = cv::imread("../resources/red_cup.jpg");  //can be JPG,PNG,GIF,TIFF,...
 
         if (frame.empty())
             throw std::runtime_error("Empty file? Wrong path?");
@@ -39,11 +88,7 @@ int App::run(void)
         //start timer
         auto start = std::chrono::steady_clock::now();
 
-        // create copy of the frame
-        cv::Mat frame2;
-        frame.copyTo(frame2);
-
-        cv::Point2f center_normalized = find_object_luma(frame2);
+        cv::Point2f center_normalized = find_object_chroma(frame);
 
         std::cout << "Center normalized: " << center_normalized << '\n';
 
@@ -54,14 +99,11 @@ int App::run(void)
         std::cout << "Elapsed time: " << elapsed_seconds.count() << "sec" << std::endl;
 
         // highlight the center of object
-        draw_cross_normalized(frame2, center_normalized, 25);
+        draw_cross_normalized(frame, center_normalized, 25);
 
         // show me the result
         cv::namedWindow("frame");
         cv::imshow("frame", frame);
-
-        cv::namedWindow("frame2");
-        cv::imshow("frame2", frame2);
 
         // keep application open until ESC is pressed
         while (true)
@@ -85,6 +127,11 @@ App::~App()
     // clean-up
     cv::destroyAllWindows();
     std::cout << "Bye...\n";
+
+    if (capture.isOpened())
+    {
+        capture.release();
+    }
 }
 
 void App::draw_cross(cv::Mat& img, int x, int y, int size)
@@ -117,6 +164,10 @@ void App::draw_cross_normalized(cv::Mat& img, cv::Point2f center_normalized, int
 
 cv::Point2f App::find_object_luma(cv::Mat & frame)
 {
+    //Copy the frame
+    cv::Mat loc_frame;
+    frame.copyTo(loc_frame);
+
     // convert to grayscale, create threshold, sum white pixels
     // compute centroid of white pixels (average X,Y coordinate of all white pixels)
     cv::Point2f center;
@@ -136,21 +187,63 @@ cv::Point2f App::find_object_luma(cv::Mat & frame)
             // FIND THRESHOLD (value 0..255)
             if (Y < 240) {
                 // set output pixel black
-                frame.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 0, 0);
+                loc_frame.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 0, 0);
             }
             else {
                 // set output pixel white
-                frame.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 255, 255);
+                loc_frame.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 255, 255);
 
                 ++tot;
                 center.x += (x - center.x) / tot;
                 center.y += (y - center.y) / tot;
-                //center_normalized.x += (x / frame.cols - center_normalized.x) / tot;
-                //center_normalized.y += (y / frame.rows - center_normalized.y) / tot;
-                center_normalized.x = center.x / frame.cols;
-                center_normalized.y = center.y / frame.rows;
             }
         }
     }
+
+    center_normalized.x = center.x / frame.cols;
+    center_normalized.y = center.y / frame.rows;
     return center_normalized;
+}
+
+cv::Point2f App::find_object_chroma(cv::Mat & frame)
+{
+    double h_low = 150.0;
+    double s_low = 125.0;
+    double v_low = 130.0;
+    double h_hi = 255.0;
+    double s_hi = 255.0;
+    double v_hi = 255.0;
+
+    cv::Mat scene_hsv, scene_threshold;
+
+    cv::cvtColor(frame, scene_hsv, cv::COLOR_BGR2HSV);
+
+    cv::Scalar lower_threshold = cv::Scalar(h_low, s_low, v_low);
+    cv::Scalar upper_threshold = cv::Scalar(h_hi, s_hi, v_hi);
+    cv::inRange(scene_hsv, lower_threshold, upper_threshold, scene_threshold);
+
+    // Perform a morphological operation
+	cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(10, 10));
+	//cv::morphologyEx(scene_threshold, scene_threshold, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 2);
+
+    // Find all non-zero (ie. white) pixels in thresholded image
+    std::vector<cv::Point> whitePixels;
+    cv::findNonZero(scene_threshold, whitePixels);
+
+    // Count white pixels
+    int whiteCnt = whitePixels.size();
+
+    // Count SUM of X_coords, Y_coords of white pixels
+    // You need at least C++17 for std::reduce()
+    //cv::Point2f whiteAccum = std::reduce(whitePixels.begin(), whitePixels.end());
+
+    // or faster = parallel version, with automatic multi-threading
+    cv::Point2f whiteAccum = std::reduce(std::execution::par_unseq, whitePixels.begin(), whitePixels.end());
+
+    // Divide by whiteCnt to get average, ie. centroid (only if whiteCnt != 0 !!!)
+    cv::Point2f centroid_absolute = whiteAccum / whiteCnt;
+    // Compute NORMALIZED coordinates
+    cv::Point2f centroid_normalized = { centroid_absolute.x / frame.cols, centroid_absolute.y / frame.rows };
+
+    return centroid_normalized;
 }
