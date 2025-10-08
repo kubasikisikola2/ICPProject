@@ -38,7 +38,6 @@ cv::Point2f centroid_nonzero(cv::Mat& scene, cv::Scalar& lower_threshold, cv::Sc
 	}
 
 	return centroid_normalized;
->>>>>>> b4cbc6e77d1ed0d642dacc04d276fc979097cae0
 }
 
 int hsv_finder(const char *filepath)
