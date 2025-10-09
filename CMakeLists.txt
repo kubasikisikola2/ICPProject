@@ -16,21 +16,24 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
+#Libor is gonna try this in Linux
+#set(WITH_TBB OFF CACHE BOOL "Enable/disable TBB backend")
+#set(BUILD_TBB OFF CACHE BOOL "Build TBB" FORCE)
+#set(HAVE_TBB OFF CACHE BOOL "Have TBB" FORCE)
 
 if(WIN32)
-    #This I can't get to work on Windows; VS seems to require a properly set up solution/project and I can't get VSCode to work either
-    find_package(OpenCV CONFIG REQUIRED PATHS "<path to your opencv>")
-
+    set(OpenCV_DIR "C:/opencv/build/x64/vc16/lib")
+    find_package(OpenCV CONFIG REQUIRED)
 elseif(UNIX)
     find_package(OpenCV CONFIG REQUIRED)
-    find_package(TBB REQUIRED) #Comment out if causes problems, Libor needs it on Linux
-    target_link_libraries(ICPProject1 PRIVATE TBB::tbb)
+    find_package(TBB REQUIRED) #Libor needs it in Linux
 endif()
 
 add_executable(ICPProject1
     ICPProject1.cpp
     "src/App.cpp"
- "src/FpsMeter.cpp")
+    "src/FpsMeter.cpp"
+)
 
 target_link_libraries(ICPProject1 PRIVATE
     fmt::fmt
@@ -40,6 +43,10 @@ target_link_libraries(ICPProject1 PRIVATE
     nlohmann_json::nlohmann_json
     ${OpenCV_LIBS}
 )
+
+if(UNIX)
+    target_link_libraries(ICPProject1 PRIVATE TBB::tbb)
+endif()
 
 target_include_directories(ICPProject1 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
