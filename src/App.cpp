@@ -36,9 +36,13 @@ bool App::init()
         std::cerr << "App init failed : " << e.what() << std::endl;
         throw;
     }
+
+    image_intruder = cv::imread("../resources/intruder.jpg");;
+    image_no_face = cv::imread("../resources/no_face.jpg");
+
+
     std::cout << "Initialized...\n";
 
-    face_cascade = cv::CascadeClassifier("../resources/haarcascade_frontalface_default.xml");
     return true;
 }
 
@@ -53,20 +57,41 @@ int App::run(void)
     cv::Size fps_text_size = cv::getTextSize(fps_string, cv::FONT_HERSHEY_SIMPLEX, FPS_TEXT_FONT_SCALE, FPS_TEXT_LINE_WIDTH, &baseline);
     cv::Point fps_text_pos(10, fps_text_size.height + 10);
     cv::Scalar fps_text_color(0, 255, 0);
+    cv::Mat show_frame;
 
+    std::thread tracker_thread(tracker_thread_func,
+                               std::ref(capture), 
+                               std::ref(tracker_terminate),
+                               std::ref(tracker_buffer_empty),
+                               std::ref(tracker_frame_deque),
+                               std::ref(tracker_pos_deque));
    
     while (1)
     {
-        capture.read(frame);
-        if (frame.empty())
-        {
-            std::cerr << "Cam disconnected? End of file?\n";
+
+        if (tracker_buffer_empty) {
+            std::cout << "Couldn't get new frame";
             break;
         }
+        tracker_frame_deque.wait();
+        cv::Mat frame = tracker_frame_deque.pop_front();
 
+        tracker_pos_deque.wait();
+        std::vector<cv::Point2f> face_pos = tracker_pos_deque.pop_front();
         
-
-        std::vector<cv::Point2f> faces = find_face(frame);
+        if (face_pos.size() > 0) {
+            draw_cross_normalized(frame, face_pos[0], 15);
+        }
+        // show frame only when one person is watching
+        if (face_pos.size() == 1) {
+            show_frame = frame;
+        }
+        else if (face_pos.size() == 0) {
+            cv::resize(image_no_face, show_frame, cv::Size(frame.cols, frame.rows));
+        }
+        else if (face_pos.size() > 1) {
+            cv::resize(image_intruder, show_frame, cv::Size(frame.cols, frame.rows));
+        }
 
         fps_meter.update();
 
@@ -75,90 +100,18 @@ int App::run(void)
             std::stringstream ss;
             ss << std::fixed << std::setprecision(2) << fps;
             fps_string = "FPS: " + ss.str();
+            std::cout << fps_string << std::endl;
         }
 
         cv::putText(frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
-
-        // show frame only when one person is watching
-        if(faces.size() == 1){
-            cv::imshow(WINDOW_TITLE, frame);
-        }
-        else if (faces.size() == 0) {
-            cv::Mat img = cv::imread("../resources/no_face.jpg");
-            cv::resize(img, img, cv::Size(frame.cols, frame.rows));
-            cv::imshow(WINDOW_TITLE, img);
-        }
-        else if (faces.size() > 1) {
-            cv::Mat img = cv::imread("../resources/intruder.jpg");
-            cv::resize(img, img, cv::Size(frame.cols, frame.rows));
-            cv::imshow(WINDOW_TITLE, img);
-        }
-            
-
-        // show grabbed frame
-        
-        
-        // WARNING: the original image MUST NOT be modified. If you want to draw into image,
-        // do your own COPY!
-
-        // analyze the image...
-        //center = find_object_chroma(frame);
-
-        // make a copy and draw center
-        //cv::Mat scene_cross;
-        //frame.copyTo(scene_cross);
-        //draw_cross_normalized(scene_cross, center, 30);
-       // cv::imshow("scene", scene_cross);
-
-        if (cv::waitKey(1) == 27)
+        cv::imshow(WINDOW_TITLE, show_frame);
+        int key = cv::waitKey(1);
+        if (key == 27) {
+            tracker_terminate = true;
+            tracker_thread.join();
             break;
-    }
-
-    return EXIT_SUCCESS;
-    
-    /*
-    cv::Mat frame;
-    try {
-        // read image
-        cv::Mat frame = cv::imread("../resources/red_cup.jpg");  //can be JPG,PNG,GIF,TIFF,...
-
-        if (frame.empty())
-            throw std::runtime_error("Empty file? Wrong path?");
-
-        //start timer
-        auto start = std::chrono::steady_clock::now();
-
-        cv::Point2f center_normalized = find_object_chroma(frame);
-
-        std::cout << "Center normalized: " << center_normalized << '\n';
-
-        // how long the computation took?
-        auto end = std::chrono::steady_clock::now();
-
-        std::chrono::duration<double> elapsed_seconds = end - start;
-        std::cout << "Elapsed time: " << elapsed_seconds.count() << "sec" << std::endl;
-
-        // highlight the center of object
-        draw_cross_normalized(frame, center_normalized, 25);
-
-        // show me the result
-        cv::namedWindow("frame");
-        cv::imshow("frame", frame);
-
-        // keep application open until ESC is pressed
-        while (true)
-        {
-            int key = cv::pollKey(); // poll OS events (key press, mouse move, ...)
-            if (key == 27) // test for ESC key
-                break;
         }
-
     }
-    catch (std::exception const& e) {
-        std::cerr << "App failed : " << e.what() << std::endl;
-        return EXIT_FAILURE;
-    }*/
-
     return EXIT_SUCCESS;
 }
 
@@ -288,26 +241,4 @@ cv::Point2f App::find_object_chroma(cv::Mat & frame)
     return centroid_normalized;
 }
 
-std::vector<cv::Point2f> App::find_face(cv::Mat & frame)
-{
-    cv::Point2f center(0.0f, 0.0f); 
 
-    cv::Mat scene_detect;
-    cv::cvtColor(frame, scene_detect, cv::COLOR_BGR2GRAY);
-    cv::resize(scene_detect, scene_detect, cv::Size(), DETECT_SIZE_SCALE_FACTOR, DETECT_SIZE_SCALE_FACTOR);
-
-    std::vector<cv::Rect> faces;
-    std::vector<cv::Point2f> center_points_norm;
-
-    face_cascade.detectMultiScale(scene_detect, faces, DETECT_SCALE_FACTOR, DETECT_MIN_NEIGHBORS, 0, cv::Size(MIN_FACE_SIZE, MIN_FACE_SIZE));
-
-
-    for (int i = 0; i < faces.size(); i++) {
-        // calculating normalized coordinates of the face
-        center.x = (faces[i].x + faces[i].width / 2.0) / scene_detect.cols;
-        center.y = (faces[i].y + faces[i].height / 2.0) / scene_detect.rows;
-        center_points_norm.push_back(center);
-    }
-
-    return center_points_norm;
-}
