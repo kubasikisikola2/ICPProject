@@ -33,7 +33,7 @@ add_executable(ICPProject1
     ICPProject1.cpp
     "src/App.cpp"
     "src/FpsMeter.cpp"
-)
+  "src/TrackerThread.cpp")
 
 target_link_libraries(ICPProject1 PRIVATE
     fmt::fmt

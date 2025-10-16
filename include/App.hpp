@@ -3,7 +3,9 @@
 #include <opencv2/opencv.hpp>
 #include "FpsMeter.hpp"
 #include "Config.hpp"
-#include "SyncedDequePartialImpl.hpp"
+#include "TrackerThread.hpp"
+//#include "SyncedDequePartialImpl.hpp"
+
 
 class App {
 public:
@@ -22,16 +24,16 @@ private:
     FpsMeter fps_meter{ std::chrono::milliseconds(FPS_METER_INTERVAL)};
 
     cv::VideoCapture capture;
-    cv::CascadeClassifier face_cascade;
-    std::vector<cv::Point2f> find_face(cv::Mat& frame);
-
+    cv::Mat image_intruder;
+    cv::Mat image_no_face;
     std::atomic<bool> tracker_terminate; //if true terminate the tracker loop
     std::atomic<bool> tracker_buffer_empty;
-    std::atomic<std::pair<float, float>> tracker_latest_pos;
+    std::vector<cv::Point2f> tracker_result;
+    std::mutex points_result_mutex;
 
     //this is just for image display in the main thread
     //pos deque to make the crosshair synchronized with the image
-    synced_deque<std::pair<float, float>> tracker_pos_deque;
+    synced_deque<std::vector<cv::Point2f>> tracker_pos_deque;
     synced_deque<cv::Mat> tracker_frame_deque;
 };
 
