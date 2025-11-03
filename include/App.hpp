@@ -1,17 +1,21 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
+#include <vector>
+
 #include "FpsMeter.hpp"
 #include "Config.hpp"
 #include "TrackerThread.hpp"
 //#include "SyncedDequePartialImpl.hpp"
-
+#include "Assets.hpp"
 
 class App {
 public:
     App();
 
     bool init(void);
+    void init_assets();
+
     int run(void);
 
     void draw_cross_normalized(cv::Mat& img, cv::Point2f center_relative, int size);
@@ -21,6 +25,27 @@ public:
 
     ~App();
 private:
+    void init_glew();
+    void init_glfw();
+    void init_opencv();
+
+    void print_opencv_info();
+    void print_gl_info();
+    void print_glm_info();
+
+    GLFWwindow* window = nullptr;
+
+    GLuint shader_prog_ID{ 0 };
+    GLuint VBO_ID{ 0 };
+    GLuint VAO_ID{ 0 };
+
+    std::vector<vertex> triangle_vertices =
+    {
+        {{0.0f,  0.5f,  0.0f}},
+        {{0.5f, -0.5f,  0.0f}},
+        {{-0.5f, -0.5f,  0.0f}}
+    };
+
     FpsMeter fps_meter{ std::chrono::milliseconds(FPS_METER_INTERVAL)};
 
     cv::VideoCapture capture;

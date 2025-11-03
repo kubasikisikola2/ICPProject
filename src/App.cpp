@@ -1,7 +1,19 @@
 #include <iostream>
 #include <numeric>
 #include <execution>
+
 #include <opencv2/core/types.hpp>
+
+#include <GL/glew.h>
+#include <GL/wglew.h>
+#include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/string_cast.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+#include <nlohmann/json.hpp>
 
 #include "App.hpp"
 
@@ -12,25 +24,201 @@ App::App()
     std::cout << "Constructed...\n";
 }
 
+void App::init_opencv()
+{
+    capture = cv::VideoCapture(0, cv::CAP_ANY);
+    if (!capture.isOpened())
+        throw std::runtime_error("Can not open camera!");
+    else
+    {
+        std::cout << "Camera opened successfully.\n";
+    }
+}
+
+void App::init_glfw()
+{
+    if (!glfwInit())
+        throw std::runtime_error("GLFW init failed!");
+    std::cout << "GLFW version: " << glfwGetVersionString() << '\n';
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    window = glfwCreateWindow(800, 600, "OpenGL context", NULL, NULL);
+    if (window == nullptr)
+        throw std::runtime_error("Window creation failed!");
+
+    glfwMakeContextCurrent(window);
+}
+
+void App::init_glew()
+{
+    GLenum glew_retval = glewInit();
+    if (glew_retval != GLEW_OK)
+        throw std::runtime_error(std::string("GLEW init failed!") + (const char*)glewGetErrorString(glew_retval));
+    else
+        std::cout << "GLEW version: " << glewGetString(GLEW_VERSION) << '\n';
+
+    GLenum wglew_retval = wglewInit();
+    if (wglew_retval != GLEW_OK)
+        throw std::runtime_error(std::string("WGLEW init failed!") + (const char*)glewGetErrorString(wglew_retval));
+    else
+        std::cout << "WGLEW initialized" << '\n';
+
+    if (!GLEW_ARB_direct_state_access)
+    {
+        throw std::runtime_error("No DSA :-( *sad whine*");
+    }
+}
+
+void App::print_opencv_info()
+{
+    std::cout << "Capture capabilities:"
+        << " width = " << capture.get(cv::CAP_PROP_FRAME_WIDTH)
+        << ", height = " << capture.get(cv::CAP_PROP_FRAME_HEIGHT)
+        << '\n';
+}
+
+void App::print_glm_info()
+{
+    std::cout << "GLM version: " << GLM_VERSION_MAJOR << '.' << GLM_VERSION_MINOR << '.'
+        << GLM_VERSION_PATCH << "rev" << GLM_VERSION_REVISION << '\n';
+}
+
+void App::print_gl_info()
+{
+    const char* vendor = (const char*)glGetString(GL_VENDOR);
+    std::cout << "GPU vendor is: " << (vendor == nullptr ? "Unknown" : vendor) << '\n';
+
+    const char* renderer = (const char*)glGetString(GL_RENDERER);
+    std::cout << "GL renderer is: " << (renderer == nullptr ? "Unknown" : renderer) << '\n';
+
+    const char* gl_version = (const char*)glGetString(GL_VERSION);
+    std::cout << "GL version is: " << (gl_version == nullptr ? "Unknown" : gl_version) << '\n';
+
+    const char* glsl_version = (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
+    std::cout << "GLSL version is: " << (glsl_version == nullptr ? "Unknown" : glsl_version) << '\n';
+
+    GLint gl_version_major, gl_version_minor;
+    glGetIntegerv(GL_MAJOR_VERSION, &gl_version_major);
+    glGetIntegerv(GL_MINOR_VERSION, &gl_version_minor);
+
+    if (gl_version_major != 4 || gl_version_minor != 6)
+    {
+        throw std::runtime_error("We're not using requested OpenGL version!");
+    }
+
+    GLint gl_context_profile_mask;
+    glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &gl_context_profile_mask);
+
+    if (gl_context_profile_mask & GL_CONTEXT_CORE_PROFILE_BIT) {
+        std::cout << "We are using CORE profile\n";
+    }
+    else {
+        if (gl_context_profile_mask & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT) {
+            std::cout << "We are using COMPATIBILITY profile\n";
+            throw std::runtime_error("We're not using CORE profile!");
+        }
+        else {
+            throw std::runtime_error("What??");
+        }
+    }
+
+    GLint gl_context_flags;
+    glGetIntegerv(GL_CONTEXT_FLAGS, &gl_context_flags);
+
+    if (gl_context_flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT) {
+        std::cout << "This GL context is forward compatible\n";
+    }
+    if (gl_context_flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
+        std::cout << "This GL context is a debug context\n";
+    }
+    if (gl_context_flags & GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT)
+    {
+        std::cout << "This GL context supports robust memory access\n";
+    }
+    if (gl_context_flags & GL_CONTEXT_FLAG_NO_ERROR_BIT)
+    {
+        std::cout << "This GL context doesn't report errors\n";
+    }
+}
+
+void App::init_assets(void) {
+    //
+    // Initialize pipeline: compile, link and use shaders
+    //
+
+    //SHADERS - define & compile & link
+    const char* vertex_shader =
+        "#version 460 core\n"
+        "in vec3 attribute_Position;"
+        "void main() {"
+        "  gl_Position = vec4(attribute_Position, 1.0);"
+        "}";
+
+    const char* fragment_shader =
+        "#version 460 core\n"
+        "uniform vec4 uniform_Color;"
+        "out vec4 FragColor;"
+        "void main() {"
+        "  FragColor = uniform_Color;"
+        "}";
+
+    GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vs, 1, &vertex_shader, NULL);
+    glCompileShader(vs);
+
+    GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fs, 1, &fragment_shader, NULL);
+    glCompileShader(fs);
+
+    shader_prog_ID = glCreateProgram();
+    glAttachShader(shader_prog_ID, fs);
+    glAttachShader(shader_prog_ID, vs);
+    glLinkProgram(shader_prog_ID);
+
+    //now we can delete shader parts (they can be reused, if you have more shaders)
+    //the final shader program already linked and stored separately
+    glDetachShader(shader_prog_ID, fs);
+    glDetachShader(shader_prog_ID, vs);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    // 
+    // Create and load data into GPU using OpenGL DSA (Direct State Access)
+    //
+
+    // Create VAO + data description (similar to container)
+    glCreateVertexArrays(1, &VAO_ID);
+
+    GLint position_attrib_location = glGetAttribLocation(shader_prog_ID, "attribute_Position");
+
+    glEnableVertexArrayAttrib(VAO_ID, position_attrib_location);
+    glVertexArrayAttribFormat(VAO_ID, position_attrib_location, sizeof(vertex::position) / sizeof(float), GL_FLOAT, GL_FALSE, offsetof(vertex, position));
+    glVertexArrayAttribBinding(VAO_ID, position_attrib_location, 0); // (GLuint vaobj, GLuint attribindex, GLuint bindingindex)
+
+    // Create and fill data
+    glCreateBuffers(1, &VBO_ID);
+    glNamedBufferData(VBO_ID, triangle_vertices.size() * sizeof(vertex), triangle_vertices.data(), GL_STATIC_DRAW);
+
+    // Connect together
+    glVertexArrayVertexBuffer(VAO_ID, 0, VBO_ID, 0, sizeof(vertex)); // (GLuint vaobj, GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)
+}
+
 bool App::init()
 {
     try {
-        //open first available camera, using any API available (autodetect) 
-        capture = cv::VideoCapture(0, cv::CAP_ANY);
-    
-        //open video file
-        //capture = cv::VideoCapture("video.mkv");
+        init_opencv();
+        print_opencv_info();
 
-        if (!capture.isOpened())
-        { 
-            throw("Couldn't open capture!");
-        }
-        else
-        {
-            std::cout << "Source: " << 
-                ": width=" << capture.get(cv::CAP_PROP_FRAME_WIDTH) <<
-                ", height=" << capture.get(cv::CAP_PROP_FRAME_HEIGHT) << '\n';
-        }
+        init_glfw();
+        init_glew();
+
+        print_gl_info();
+        print_glm_info();
+
+        init_assets();
     }
     catch (std::exception const& e) {
         std::cerr << "App init failed : " << e.what() << std::endl;
@@ -40,7 +228,6 @@ bool App::init()
     image_intruder = cv::imread("../resources/intruder.jpg");;
     image_no_face = cv::imread("../resources/no_face.jpg");
 
-
     std::cout << "Initialized...\n";
 
     return true;
@@ -48,7 +235,19 @@ bool App::init()
 
 int App::run(void)
 {
-    
+    GLfloat r, g, b, a;
+    r = g = b = a = 1.0f; //white color
+
+    // Activate shader program. There is only one program, so activation can be out of the loop. 
+    // In more realistic scenarios, you will activate different shaders for different 3D objects.
+    glUseProgram(shader_prog_ID);
+
+    // Get uniform location in GPU program. This will not change, so it can be moved out of the game loop.
+    GLint uniform_color_location = glGetUniformLocation(shader_prog_ID, "uniform_Color");
+    if (uniform_color_location == -1) {
+        std::cerr << "Uniform location is not found in active shader program. Did you forget to activate it?\n";
+    }
+
     cv::Mat frame, scene;
     cv::Point2f center;
     std::string fps_string;
@@ -68,6 +267,22 @@ int App::run(void)
    
     while (1)
     {
+        // clear canvas
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        //set uniform parameter for shader
+        // (try to change the color in key callback)          
+        glUniform4f(uniform_color_location, r, g, b, a);
+
+        //bind 3d object data
+        glBindVertexArray(VAO_ID);
+
+        // draw all VAO data
+        glDrawArrays(GL_TRIANGLES, 0, triangle_vertices.size());
+
+        // poll events, call callbacks, flip back<->front buffer
+        glfwPollEvents();
+        glfwSwapBuffers(window);
 
         if (tracker_buffer_empty) {
             std::cout << "Couldn't get new frame";
@@ -106,7 +321,7 @@ int App::run(void)
         cv::putText(frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
         cv::imshow(WINDOW_TITLE, show_frame);
         int key = cv::waitKey(1);
-        if (key == 27) {
+        if (key == 27 || glfwWindowShouldClose(window)) {
             tracker_terminate = true;
             tracker_thread.join();
             break;
@@ -117,6 +332,14 @@ int App::run(void)
 
 App::~App()
 {
+    // OpenGL clean-up
+    if (shader_prog_ID)
+        glDeleteProgram(shader_prog_ID);
+    if (VBO_ID)
+        glDeleteBuffers(1, &VBO_ID);
+    if (VAO_ID)
+        glDeleteVertexArrays(1, &VAO_ID);
+
     // clean-up
     cv::destroyAllWindows();
     std::cout << "Bye...\n";
