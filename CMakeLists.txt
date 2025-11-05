@@ -15,6 +15,7 @@ find_package(glew CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 #Libor is gonna try this in Linux
 #set(WITH_TBB OFF CACHE BOOL "Enable/disable TBB backend")
@@ -33,7 +34,9 @@ add_executable(ICPProject1
     ICPProject1.cpp
     "src/App.cpp"
     "src/FpsMeter.cpp"
-  "src/TrackerThread.cpp")
+    "src/TrackerThread.cpp"
+    "src/Callbacks.cpp"
+)
 
 target_link_libraries(ICPProject1 PRIVATE
     fmt::fmt
@@ -41,6 +44,7 @@ target_link_libraries(ICPProject1 PRIVATE
     glfw
     glm::glm
     nlohmann_json::nlohmann_json
+    imgui::imgui
     ${OpenCV_LIBS}
 )
 

@@ -3,7 +3,9 @@
 #include <execution>
 
 #include <opencv2/core/types.hpp>
+#include <nlohmann/json.hpp>
 
+// OpenGL headers
 #include <GL/glew.h>
 #include <GL/wglew.h>
 #include <GLFW/glfw3.h>
@@ -13,7 +15,10 @@
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include <nlohmann/json.hpp>
+// ImGUI headers
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 
 #include "App.hpp"
 
@@ -37,6 +42,8 @@ void App::init_opencv()
 
 void App::init_glfw()
 {
+    glfwSetErrorCallback(glfw_error_callback);
+
     if (!glfwInit())
         throw std::runtime_error("GLFW init failed!");
     std::cout << "GLFW version: " << glfwGetVersionString() << '\n';
@@ -45,11 +52,23 @@ void App::init_glfw()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+
     window = glfwCreateWindow(800, 600, "OpenGL context", NULL, NULL);
-    if (window == nullptr)
+    if (window == nullptr) {
         throw std::runtime_error("Window creation failed!");
+    }
+
+    glfwSetWindowUserPointer(window, this);
 
     glfwMakeContextCurrent(window);
+
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+    glfwSetFramebufferSizeCallback(window, glfw_framebuffer_size_callback);
+    glfwSetMouseButtonCallback(window, glfw_mouse_button_callback);
+    glfwSetKeyCallback(window, glfw_key_callback);
+    glfwSetScrollCallback(window, glfw_scroll_callback);
 }
 
 void App::init_glew()
@@ -70,6 +89,20 @@ void App::init_glew()
     {
         throw std::runtime_error("No DSA :-( *sad whine*");
     }
+
+    if (GLEW_ARB_debug_output)
+    {
+        glDebugMessageCallback(MessageCallback, 0);
+        glEnable(GL_DEBUG_OUTPUT);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+
+        //default is asynchronous debug output, use this to simulate glGetError() functionality
+        //glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+
+        std::cout << "GL_DEBUG enabled." << std::endl;
+    }
+    else
+        std::cout << "GL_DEBUG NOT SUPPORTED!" << std::endl;
 }
 
 void App::print_opencv_info()
@@ -206,9 +239,25 @@ void App::init_assets(void) {
     glVertexArrayVertexBuffer(VAO_ID, 0, VBO_ID, 0, sizeof(vertex)); // (GLuint vaobj, GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)
 }
 
+void App::init_imgui()
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init();
+    std::cout << "ImGUI version: " << ImGui::GetVersion() << "\n";
+}
+
 bool App::init()
 {
     try {
+        std::cout << "Current working directory: " << std::filesystem::current_path().generic_string() << '\n';
+
+        if (!std::filesystem::exists("../resources"))
+        {
+            throw std::runtime_error("Directory 'resources' not found. Various media files are expected to be there.");
+        }
+
         init_opencv();
         print_opencv_info();
 
@@ -218,7 +267,13 @@ bool App::init()
         print_gl_info();
         print_glm_info();
 
+        glfwSwapInterval(is_vsync_on ? 1 : 0); // vsync
+
         init_assets();
+
+        init_imgui();
+
+        glfwShowWindow(window);
     }
     catch (std::exception const& e) {
         std::cerr << "App init failed : " << e.what() << std::endl;
@@ -248,6 +303,9 @@ int App::run(void)
         std::cerr << "Uniform location is not found in active shader program. Did you forget to activate it?\n";
     }
 
+    FpsMeter gl_fps_meter(std::chrono::milliseconds(FPS_METER_INTERVAL));
+    double gl_fps{ 0.0 }; //unintentional surprised face LOL!
+
     cv::Mat frame, scene;
     cv::Point2f center;
     std::string fps_string;
@@ -264,25 +322,42 @@ int App::run(void)
                                std::ref(tracker_buffer_empty),
                                std::ref(tracker_frame_deque),
                                std::ref(tracker_pos_deque));
-   
+
+    double now = glfwGetTime();
+    double begin_time = now;
+    double last_time = now; // so that delta time is 0 at the beginning
+
+    glClearColor(0, 0, 0, 0);
+
+    float triangle_animation_speed = 120.0;
+    float triangle_hue{};
+
     while (1)
     {
-        // clear canvas
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // ImGui prepare render (only if required)
+        if (show_imgui) {
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+            //ImGui::ShowDemoWindow(); // Enable mouse when using Demo!
+            ImGui::SetNextWindowPos(ImVec2(10, 10));
+            ImGui::SetNextWindowSize(ImVec2(250, 100));
 
-        //set uniform parameter for shader
-        // (try to change the color in key callback)          
-        glUniform4f(uniform_color_location, r, g, b, a);
+            ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+            ImGui::Text("V-Sync: %s", is_vsync_on ? "ON" : "OFF");
+            ImGui::Text("FPS: %.1f", gl_fps);
+            ImGui::Text("(press RMB to release mouse)");
+            ImGui::Text("(hit D to show/hide info)");
+            ImGui::End();
+        }
 
-        //bind 3d object data
-        glBindVertexArray(VAO_ID);
+        //GAME STATE UPDATES HERE
+        double delta_time = begin_time - last_time;
+        double time_step = game_paused ? 0 : game_speed * delta_time;
 
-        // draw all VAO data
-        glDrawArrays(GL_TRIANGLES, 0, triangle_vertices.size());
-
-        // poll events, call callbacks, flip back<->front buffer
-        glfwPollEvents();
-        glfwSwapBuffers(window);
+        triangle_hue += triangle_animation_speed * time_step;
+        triangle_hue = std::fmod(triangle_hue, 360);
+        hsv2rgb(triangle_hue, 1, 1, r, g, b);
 
         if (tracker_buffer_empty) {
             std::cout << "Couldn't get new frame";
@@ -326,12 +401,56 @@ int App::run(void)
             tracker_thread.join();
             break;
         }
+
+        // clear canvas
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        //DRAW CALLS HERE
+
+        //set uniform parameter for shader
+        // (try to change the color in key callback)          
+        glUniform4f(uniform_color_location, r, g, b, a);
+
+        //bind 3d object data
+        glBindVertexArray(VAO_ID);
+
+        // draw all VAO data
+        glDrawArrays(GL_TRIANGLES, 0, triangle_vertices.size());
+
+        if (show_imgui) {
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        }
+
+        glfwSwapBuffers(window);
+
+        now = glfwGetTime();
+        last_time = begin_time;
+        begin_time = now;
+
+        gl_fps_meter.update();
+        if (gl_fps_meter.is_updated())
+        {
+            gl_fps = gl_fps_meter.get_fps();
+            std::stringstream ss;
+            ss << std::fixed << std::setprecision(2) << gl_fps;
+            std::string title_string = "ICP Project [FPS: " + ss.str() + ", VSync: " + (is_vsync_on ? "ON" : "OFF") + "]";
+            glfwSetWindowTitle(window, title_string.c_str());
+        }
+
+        // poll events, call callbacks, flip back<->front buffer
+        glfwPollEvents();
     }
     return EXIT_SUCCESS;
 }
 
-App::~App()
+void App::destroy(void)
 {
+    // clean up ImGUI
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
     // OpenGL clean-up
     if (shader_prog_ID)
         glDeleteProgram(shader_prog_ID);
@@ -340,14 +459,19 @@ App::~App()
     if (VAO_ID)
         glDeleteVertexArrays(1, &VAO_ID);
 
-    // clean-up
+    // clean-up OpenCV
     cv::destroyAllWindows();
-    std::cout << "Bye...\n";
-
+    // release camera
     if (capture.isOpened())
     {
         capture.release();
     }
+}
+
+App::~App()
+{
+    destroy();
+    std::cout << "Bye...\n";
 }
 
 void App::draw_cross(cv::Mat& img, int x, int y, int size)
@@ -464,4 +588,12 @@ cv::Point2f App::find_object_chroma(cv::Mat & frame)
     return centroid_normalized;
 }
 
-
+// https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB_alternative
+void App::hsv2rgb(float h, float s, float v, float& r, float& g, float& b)
+{
+    auto f = [&](uint n) {
+        auto k = [=]() { return fmod(n + h / 60, 6); };
+        return v - v * s * std::fmax(0, std::min(k(), std::min(4 - k(), 1.0)));
+        };
+    r = f(5); g = f(3); b = f(1);
+}
