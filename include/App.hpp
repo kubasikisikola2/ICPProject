@@ -33,7 +33,10 @@ private:
     void init_assets();
     void init_imgui();
 
+    void check_gl_version();
+
     void print_opencv_info();
+    void print_glfw_info();
     void print_gl_info();
     void print_glm_info();
 

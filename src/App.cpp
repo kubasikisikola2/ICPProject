@@ -46,7 +46,6 @@ void App::init_glfw()
 
     if (!glfwInit())
         throw std::runtime_error("GLFW init failed!");
-    std::cout << "GLFW version: " << glfwGetVersionString() << '\n';
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -105,12 +104,29 @@ void App::init_glew()
         std::cout << "GL_DEBUG NOT SUPPORTED!" << std::endl;
 }
 
+void App::check_gl_version()
+{
+    GLint gl_version_major, gl_version_minor;
+    glGetIntegerv(GL_MAJOR_VERSION, &gl_version_major);
+    glGetIntegerv(GL_MINOR_VERSION, &gl_version_minor);
+
+    if (gl_version_major != 4 || gl_version_minor != 6)
+    {
+        throw std::runtime_error("We're not using requested OpenGL version!");
+    }
+}
+
 void App::print_opencv_info()
 {
     std::cout << "Capture capabilities:"
         << " width = " << capture.get(cv::CAP_PROP_FRAME_WIDTH)
         << ", height = " << capture.get(cv::CAP_PROP_FRAME_HEIGHT)
         << '\n';
+}
+
+void App::print_glfw_info()
+{
+    std::cout << "GLFW version: " << glfwGetVersionString() << '\n';
 }
 
 void App::print_glm_info()
@@ -132,15 +148,6 @@ void App::print_gl_info()
 
     const char* glsl_version = (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
     std::cout << "GLSL version is: " << (glsl_version == nullptr ? "Unknown" : glsl_version) << '\n';
-
-    GLint gl_version_major, gl_version_minor;
-    glGetIntegerv(GL_MAJOR_VERSION, &gl_version_major);
-    glGetIntegerv(GL_MINOR_VERSION, &gl_version_minor);
-
-    if (gl_version_major != 4 || gl_version_minor != 6)
-    {
-        throw std::runtime_error("We're not using requested OpenGL version!");
-    }
 
     GLint gl_context_profile_mask;
     glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &gl_context_profile_mask);
@@ -259,12 +266,15 @@ bool App::init()
         }
 
         init_opencv();
-        print_opencv_info();
 
         init_glfw();
         init_glew();
 
+        check_gl_version();
+
+        print_opencv_info();
         print_gl_info();
+        print_glfw_info();
         print_glm_info();
 
         glfwSwapInterval(is_vsync_on ? 1 : 0); // vsync
