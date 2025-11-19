@@ -10,6 +10,9 @@
 #include "TrackerThread.hpp"
 //#include "SyncedDequePartialImpl.hpp"
 #include "Assets.hpp"
+#include "ShaderProgram.hpp"
+#include "Mesh.hpp"
+#include "Model.hpp"
 
 class App {
 public:
@@ -60,7 +63,7 @@ private:
     GLuint VBO_ID{ 0 };
     GLuint VAO_ID{ 0 };
 
-    std::vector<vertex> triangle_vertices =
+    std::vector<Vertex> triangle_vertices =
     {
         {{0.0f,  0.5f,  0.0f}},
         {{0.5f, -0.5f,  0.0f}},
@@ -81,5 +84,14 @@ private:
     //pos deque to make the crosshair synchronized with the image
     synced_deque<std::vector<cv::Point2f>> tracker_pos_deque;
     synced_deque<cv::Mat> tracker_frame_deque;
+
+    // hash map for storing shader programs
+    std::unordered_map<std::string, std::shared_ptr<ShaderProgram>> shader_library;
+
+    //hash map for storing meshes
+    std::unordered_map<std::string, std::shared_ptr<Mesh>> mesh_library;
+
+    // all objects on the scene
+    std::unordered_map<std::string, Model> scene;
 };
 

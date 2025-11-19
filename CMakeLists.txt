@@ -36,7 +36,7 @@ add_executable(ICPProject1
     "src/FpsMeter.cpp"
     "src/TrackerThread.cpp"
     "src/Callbacks.cpp"
-)
+ "src/ShaderProgram.cpp" "src/ObjectLoader.cpp")
 
 target_link_libraries(ICPProject1 PRIVATE
     fmt::fmt

@@ -21,6 +21,7 @@
 #include <imgui_impl_opengl3.h>
 
 #include "App.hpp"
+#include "ObjectLoader.hpp"
 
 App::App()
 {
@@ -185,65 +186,46 @@ void App::print_gl_info()
 }
 
 void App::init_assets(void) {
-    //
-    // Initialize pipeline: compile, link and use shaders
-    //
 
-    //SHADERS - define & compile & link
-    const char* vertex_shader =
-        "#version 460 core\n"
-        "in vec3 attribute_Position;"
-        "void main() {"
-        "  gl_Position = vec4(attribute_Position, 1.0);"
-        "}";
+    // load shaders from file to shader_library 
+    shader_library.emplace("simple_shader", std::make_shared<ShaderProgram>(std::filesystem::path("../resources/shaders/basic.vert"), std::filesystem::path("../resources/shaders/basic.frag")));
+ 
+    // Load mesh
+    std::filesystem::path filename = "../resources/models/triangle.obj";
+    if (!std::filesystem::exists(filename)) {
+        throw std::runtime_error("File does not exist: " + filename.string());
+    }
 
-    const char* fragment_shader =
-        "#version 460 core\n"
-        "uniform vec4 uniform_Color;"
-        "out vec4 FragColor;"
-        "void main() {"
-        "  FragColor = uniform_Color;"
-        "}";
+    std::vector<Vertex> vertices;
+    std::vector<GLuint> indices;
+    if (!loadOBJ(filename, vertices, indices)) {
+        throw std::runtime_error("Loading failed: " + filename.string());
+    }
 
-    GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vs, 1, &vertex_shader, NULL);
-    glCompileShader(vs);
+    auto mesh = std::make_shared<Mesh>(vertices, indices, GL_TRIANGLES);
 
-    GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fs, 1, &fragment_shader, NULL);
-    glCompileShader(fs);
+    auto mesh_ptr = std::make_shared<Mesh>(vertices, indices, GL_TRIANGLES);
+    mesh_library.emplace("simple_mesh", mesh_ptr);
 
-    shader_prog_ID = glCreateProgram();
-    glAttachShader(shader_prog_ID, fs);
-    glAttachShader(shader_prog_ID, vs);
-    glLinkProgram(shader_prog_ID);
+    // Load model and attach mesh
+    Model my_model;
+    my_model.addMesh(mesh_ptr, shader_library.at("simple_shader"));
+    scene.emplace("simple_object", my_model);
 
-    //now we can delete shader parts (they can be reused, if you have more shaders)
-    //the final shader program already linked and stored separately
-    glDetachShader(shader_prog_ID, fs);
-    glDetachShader(shader_prog_ID, vs);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
+    std::vector<Vertex> vertices2;
+    std::vector<GLuint> indices2;
+    filename = "../resources/models/triangle2.obj";
+    if (!loadOBJ(filename, vertices2, indices2)) {
+        throw std::runtime_error("Loading failed: " + filename.string());
+    }
+   
+    auto mesh2 = std::make_shared<Mesh>(vertices2, indices2, GL_TRIANGLES);
+    mesh_library.emplace("simple_mesh", mesh_ptr);
 
-    // 
-    // Create and load data into GPU using OpenGL DSA (Direct State Access)
-    //
+    Model model2;
+    my_model.addMesh(mesh2, shader_library.at("simple_shader"));
+    scene.emplace("object2", my_model);
 
-    // Create VAO + data description (similar to container)
-    glCreateVertexArrays(1, &VAO_ID);
-
-    GLint position_attrib_location = glGetAttribLocation(shader_prog_ID, "attribute_Position");
-
-    glEnableVertexArrayAttrib(VAO_ID, position_attrib_location);
-    glVertexArrayAttribFormat(VAO_ID, position_attrib_location, sizeof(vertex::position) / sizeof(float), GL_FLOAT, GL_FALSE, offsetof(vertex, position));
-    glVertexArrayAttribBinding(VAO_ID, position_attrib_location, 0); // (GLuint vaobj, GLuint attribindex, GLuint bindingindex)
-
-    // Create and fill data
-    glCreateBuffers(1, &VBO_ID);
-    glNamedBufferData(VBO_ID, triangle_vertices.size() * sizeof(vertex), triangle_vertices.data(), GL_STATIC_DRAW);
-
-    // Connect together
-    glVertexArrayVertexBuffer(VAO_ID, 0, VBO_ID, 0, sizeof(vertex)); // (GLuint vaobj, GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride)
 }
 
 void App::init_imgui()
@@ -283,6 +265,9 @@ bool App::init()
 
         init_imgui();
 
+       
+        //shader_library.emplace("rainbow", std::make_shared<ShaderProgram>("path_to.vert", "rainbow.frag"));
+
         glfwShowWindow(window);
     }
     catch (std::exception const& e) {
@@ -303,20 +288,12 @@ int App::run(void)
     GLfloat r, g, b, a;
     r = g = b = a = 1.0f; //white color
 
-    // Activate shader program. There is only one program, so activation can be out of the loop. 
-    // In more realistic scenarios, you will activate different shaders for different 3D objects.
-    glUseProgram(shader_prog_ID);
-
-    // Get uniform location in GPU program. This will not change, so it can be moved out of the game loop.
-    GLint uniform_color_location = glGetUniformLocation(shader_prog_ID, "uniform_Color");
-    if (uniform_color_location == -1) {
-        std::cerr << "Uniform location is not found in active shader program. Did you forget to activate it?\n";
-    }
+    glm::vec4 my_rgba(r, g, b, a);
 
     FpsMeter gl_fps_meter(std::chrono::milliseconds(FPS_METER_INTERVAL));
     double gl_fps{ 0.0 }; //unintentional surprised face LOL!
 
-    cv::Mat frame, scene;
+    cv::Mat frame;
     cv::Point2f center;
     std::string fps_string;
 
@@ -367,12 +344,18 @@ int App::run(void)
 
         triangle_hue += triangle_animation_speed * time_step;
         triangle_hue = std::fmod(triangle_hue, 360);
-        hsv2rgb(triangle_hue, 1, 1, r, g, b);
+        //hsv2rgb(triangle_hue, 1, 1, r, g, b);
 
+        
+
+        // TODO reimplement face detection to not block main thread
+        /*
         if (tracker_buffer_empty) {
             std::cout << "Couldn't get new frame";
             break;
         }
+         
+       
         tracker_frame_deque.wait();
         cv::Mat frame = tracker_frame_deque.pop_front();
 
@@ -392,7 +375,7 @@ int App::run(void)
         else if (face_pos.size() > 1) {
             cv::resize(image_intruder, show_frame, cv::Size(frame.cols, frame.rows));
         }
-
+        
         fps_meter.update();
 
         if (fps_meter.is_updated()) {
@@ -402,6 +385,7 @@ int App::run(void)
             fps_string = "FPS: " + ss.str();
             std::cout << fps_string << std::endl;
         }
+        
 
         cv::putText(frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
         cv::imshow(WINDOW_TITLE, show_frame);
@@ -411,21 +395,21 @@ int App::run(void)
             tracker_thread.join();
             break;
         }
+        */
 
         // clear canvas
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        //DRAW CALLS HERE
+        // activate shader
+        auto current_shader = shader_library.at("simple_shader");
+        current_shader->use();
+        current_shader->setUniform("my_color", my_rgba);
 
-        //set uniform parameter for shader
-        // (try to change the color in key callback)          
-        glUniform4f(uniform_color_location, r, g, b, a);
-
-        //bind 3d object data
-        glBindVertexArray(VAO_ID);
-
-        // draw all VAO data
-        glDrawArrays(GL_TRIANGLES, 0, triangle_vertices.size());
+        //draw all models from scene
+        for (auto &model : scene) {
+            model.second.update(now);
+            model.second.draw();
+        }
 
         if (show_imgui) {
             ImGui::Render();
