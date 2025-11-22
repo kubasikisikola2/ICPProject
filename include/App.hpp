@@ -4,6 +4,7 @@
 #include <vector>
 #include <gl/glew.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 #include "FpsMeter.hpp"
 #include "Config.hpp"
@@ -52,6 +53,7 @@ private:
     static void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
 
     void hsv2rgb(float h, float s, float v, float& r, float& g, float& b);
+    void update_projection_matrix(void);
 
     GLFWwindow* window = nullptr;
     bool is_vsync_on{ true };
@@ -93,5 +95,9 @@ private:
 
     // all objects on the scene
     std::unordered_map<std::string, Model> scene;
+
+    int viewport_width, viewport_height;
+    float FOV_degrees = 60.0f;
+    glm::mat4 projection_matrix = glm::identity<glm::mat4>();
 };
 

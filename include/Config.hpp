@@ -11,3 +11,8 @@
 #define DETECT_SCALE_FACTOR 1.2
 #define MIN_FACE_SIZE 3
 #define DETECT_MIN_NEIGHBORS 2
+
+//GL config
+#define NEAR_CLIP_PLANE 0.1f
+#define NEAR_CLIP_PLANE 0.1f
+#define FAR_CLIP_PLANE 20000.0f

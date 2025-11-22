@@ -35,12 +35,23 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 }
 
 void App::glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    if (yoffset > 0.0) {
-        std::cout << "wheel up...\n";
-    }
+	auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
+	this_inst->FOV_degrees += 10 * yoffset; // yoffset is mostly +1 or -1; one degree difference in fov is not visible
+	this_inst->FOV_degrees = std::clamp(this_inst->FOV_degrees, 20.0f, 170.0f); // limit FOV to reasonable values...
+
+	this_inst->update_projection_matrix();
 }
 
 void App::glfw_framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+	auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
+	this_inst->viewport_width = width;
+	this_inst->viewport_height = height;
+
+	// set viewport
+	glViewport(0, 0, width, height);
+	//now your canvas has [0,0] in bottom left corner, and its size is [width x height] 
+
+	this_inst->update_projection_matrix();
 }
 
 void App::glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {

@@ -103,6 +103,8 @@ void App::init_glew()
     }
     else
         std::cout << "GL_DEBUG NOT SUPPORTED!" << std::endl;
+
+    glEnable(GL_DEPTH_TEST);
 }
 
 void App::check_gl_version()
@@ -214,17 +216,17 @@ void App::init_assets(void) {
 
     std::vector<Vertex> vertices2;
     std::vector<GLuint> indices2;
-    filename = "../resources/models/triangle2.obj";
+    filename = "../resources/models/bunny_tri_vnt.obj";
     if (!loadOBJ(filename, vertices2, indices2)) {
         throw std::runtime_error("Loading failed: " + filename.string());
     }
    
     auto mesh2 = std::make_shared<Mesh>(vertices2, indices2, GL_TRIANGLES);
-    mesh_library.emplace("simple_mesh", mesh_ptr);
+    mesh_library.emplace("bunny_mesh", mesh_ptr);
 
     Model model2;
     my_model.addMesh(mesh2, shader_library.at("simple_shader"));
-    scene.emplace("object2", my_model);
+    scene.emplace("bunny", my_model);
 
 }
 
@@ -265,7 +267,6 @@ bool App::init()
 
         init_imgui();
 
-       
         //shader_library.emplace("rainbow", std::make_shared<ShaderProgram>("path_to.vert", "rainbow.frag"));
 
         glfwShowWindow(window);
@@ -303,12 +304,12 @@ int App::run(void)
     cv::Scalar fps_text_color(0, 255, 0);
     cv::Mat show_frame;
 
-    std::thread tracker_thread(tracker_thread_func,
+    /*std::thread tracker_thread(tracker_thread_func,
                                std::ref(capture), 
                                std::ref(tracker_terminate),
                                std::ref(tracker_buffer_empty),
                                std::ref(tracker_frame_deque),
-                               std::ref(tracker_pos_deque));
+                               std::ref(tracker_pos_deque));*/
 
     double now = glfwGetTime();
     double begin_time = now;
@@ -319,7 +320,11 @@ int App::run(void)
     float triangle_animation_speed = 120.0;
     float triangle_hue{};
 
-    while (1)
+    glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
+    glViewport(0, 0, viewport_width, viewport_height);
+    update_projection_matrix();
+
+    while (!glfwWindowShouldClose(window))
     {
         // ImGui prepare render (only if required)
         if (show_imgui) {
@@ -344,9 +349,12 @@ int App::run(void)
 
         triangle_hue += triangle_animation_speed * time_step;
         triangle_hue = std::fmod(triangle_hue, 360);
-        //hsv2rgb(triangle_hue, 1, 1, r, g, b);
+        hsv2rgb(triangle_hue, 1, 1, r, g, b);
 
-        
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
+        {
+            scene.at("bunny").rotate(glm::vec3(0.0f, 180.0f * time_step, 0.0f));
+        }
 
         // TODO reimplement face detection to not block main thread
         /*
@@ -401,9 +409,17 @@ int App::run(void)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // activate shader
-        auto current_shader = shader_library.at("simple_shader");
+        auto& current_shader = shader_library.at("simple_shader");
         current_shader->use();
         current_shader->setUniform("my_color", my_rgba);
+        //set View matrix = set CAMERA
+        glm::mat4 view_matrix = glm::lookAt(
+            glm::vec3(0, 0, 10), // position of camera
+            glm::vec3(0, 0, 0),    // where to look
+            glm::vec3(0, 1, 0)     // up direction
+        );
+        current_shader->setUniform("uV_m", view_matrix);
+        current_shader->setUniform("uP_m", projection_matrix);
 
         //draw all models from scene
         for (auto &model : scene) {
@@ -590,4 +606,15 @@ void App::hsv2rgb(float h, float s, float v, float& r, float& g, float& b)
         return v - v * s * std::fmax(0, std::min(k(), std::min(4 - k(), 1.0)));
         };
     r = f(5); g = f(3); b = f(1);
+}
+
+void App::update_projection_matrix(void)
+{
+    if (viewport_height <= 0)
+    {
+        viewport_height = 1;
+    }
+    float ratio = static_cast<float>(viewport_width) / viewport_height;
+    glViewport(0, 0, viewport_width, viewport_height);
+    projection_matrix = glm::perspective(glm::radians(FOV_degrees), ratio, NEAR_CLIP_PLANE, FAR_CLIP_PLANE);
 }
