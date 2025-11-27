@@ -14,10 +14,12 @@
 #include "ShaderProgram.hpp"
 #include "Mesh.hpp"
 #include "Model.hpp"
+#include "Camera.hpp"
 
 class App {
 public:
     App();
+
 
     bool init(void);
     void destroy(void);
@@ -28,7 +30,7 @@ public:
     void draw_cross(cv::Mat& img, int x, int y, int size);
     cv::Point2f find_object_luma(cv::Mat & frame);
     cv::Point2f find_object_chroma(cv::Mat & frame);
-
+    bool firstMouse;
     ~App();
 private:
     void init_glew();
@@ -43,8 +45,11 @@ private:
     void print_glfw_info();
     void print_gl_info();
     void print_glm_info();
+    double cursorLastX{ 0 };
+    double cursorLastY{ 0 };
 
     //callbacks
+    static void glfw_cursorPositionCallback(GLFWwindow* window, double xpos, double ypos);
     static void glfw_error_callback(int error, const char* description);
     static void glfw_framebuffer_size_callback(GLFWwindow* window, int width, int height);
     static void glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
@@ -99,5 +104,6 @@ private:
     int viewport_width, viewport_height;
     float FOV_degrees = 60.0f;
     glm::mat4 projection_matrix = glm::identity<glm::mat4>();
+    Camera camera;
 };
 
