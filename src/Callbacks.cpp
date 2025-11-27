@@ -5,14 +5,31 @@
 
 #include "App.hpp"
 
+void App::glfw_cursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
+	auto app = static_cast<App*>(glfwGetWindowUserPointer(window));
+
+	// ignornig first movement to prevent flicks
+	if (app->firstMouse)
+	{
+		app->cursorLastX = xpos;
+		app->cursorLastY = ypos;
+		app->firstMouse = false;
+		return;  
+	}
+
+	app->camera.ProcessMouseMovement(xpos - app->cursorLastX, (ypos - app->cursorLastY) * -1.0);
+	app->cursorLastX = xpos;
+	app->cursorLastY = ypos;
+}
+
 void App::glfw_error_callback(int error, const char* description)
 {
 	std::cerr << "GLFW error: " << description << std::endl;
 }
 
-void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
+void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
+
 	if ((action == GLFW_PRESS) || (action == GLFW_REPEAT)) {
 		switch (key) {
 		case GLFW_KEY_ESCAPE:

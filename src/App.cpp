@@ -27,6 +27,7 @@ App::App()
 {
     // default constructor
     // nothing to do here (so far...)
+    firstMouse = true;
     std::cout << "Constructed...\n";
 }
 
@@ -69,6 +70,7 @@ void App::init_glfw()
     glfwSetMouseButtonCallback(window, glfw_mouse_button_callback);
     glfwSetKeyCallback(window, glfw_key_callback);
     glfwSetScrollCallback(window, glfw_scroll_callback);
+    glfwSetCursorPosCallback(window, glfw_cursorPositionCallback);
 }
 
 void App::init_glew()
@@ -267,8 +269,6 @@ bool App::init()
 
         init_imgui();
 
-        //shader_library.emplace("rainbow", std::make_shared<ShaderProgram>("path_to.vert", "rainbow.frag"));
-
         glfwShowWindow(window);
     }
     catch (std::exception const& e) {
@@ -323,6 +323,9 @@ int App::run(void)
     glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
     glViewport(0, 0, viewport_width, viewport_height);
     update_projection_matrix();
+
+    //set initial camera position
+    //camera.Position = glm::vec3(0, 0, 10);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -413,11 +416,9 @@ int App::run(void)
         current_shader->use();
         current_shader->setUniform("my_color", my_rgba);
         //set View matrix = set CAMERA
-        glm::mat4 view_matrix = glm::lookAt(
-            glm::vec3(0, 0, 10), // position of camera
-            glm::vec3(0, 0, 0),    // where to look
-            glm::vec3(0, 1, 0)     // up direction
-        );
+        camera.ProcessInput(window, delta_time);
+        update_projection_matrix();
+        glm::mat4 view_matrix = camera.GetViewMatrix();
         current_shader->setUniform("uV_m", view_matrix);
         current_shader->setUniform("uP_m", projection_matrix);
 
