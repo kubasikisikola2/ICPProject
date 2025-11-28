@@ -52,6 +52,8 @@ void App::init_glfw()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    
+    glfwWindowHint(GLFW_SAMPLES, 4);
 
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
@@ -105,6 +107,15 @@ void App::init_glew()
     }
     else
         std::cout << "GL_DEBUG NOT SUPPORTED!" << std::endl;
+
+    if (GLEW_ARB_multisample)
+    {
+        std::cout << "GL antialiasing is supported." << std::endl;
+    }
+    else
+    {
+        std::cout << "GL antialiasing is NOT supported." << std::endl;
+    }
 
     glEnable(GL_DEPTH_TEST);
 }
