@@ -42,7 +42,7 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 			glfwSwapInterval(this_inst->is_vsync_on);
 			std::cout << "VSync: " << this_inst->is_vsync_on << "\n";
 			break;
-		case GLFW_KEY_D:
+		case GLFW_KEY_TAB:
 			this_inst->show_imgui = !this_inst->show_imgui;
 			break;
 		default:
