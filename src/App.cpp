@@ -262,6 +262,11 @@ bool App::init()
             throw std::runtime_error("Directory 'resources' not found. Various media files are expected to be there.");
         }
 
+        if (!std::filesystem::exists("../screenshots"))
+        {
+            std::filesystem::create_directory("../screenshots");
+        }
+
         init_opencv();
 
         init_glfw();
@@ -334,6 +339,7 @@ int App::run(void)
     glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
     glViewport(0, 0, viewport_width, viewport_height);
     update_projection_matrix();
+    screenshot.create(viewport_height, viewport_width, CV_8UC3);
 
     //set initial camera position
     //camera.Position = glm::vec3(0, 0, 10);
@@ -444,6 +450,19 @@ int App::run(void)
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         }
 
+        if (glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS)
+        {
+            glReadPixels(0, 0, screenshot.cols, screenshot.rows, GL_BGR, GL_UNSIGNED_BYTE, screenshot.data);
+            cv::flip(screenshot, screenshot, 0);
+            auto screenshot_now = std::chrono::system_clock::now();
+            auto screenshot_time_t = std::chrono::system_clock::to_time_t(screenshot_now);
+            std::stringstream filename;
+            filename << "../screenshots/" + std::string(SCREENSHOT_FILE_NAME) + '_';
+            filename << std::put_time(std::localtime(&screenshot_time_t), SCREENSHOT_TIMESTAMP_FORMAT);
+            filename << ".jpg";
+            cv::imwrite(filename.str().c_str(), screenshot);
+        }
+
         glfwSwapBuffers(window);
 
         now = glfwGetTime();
@@ -456,7 +475,7 @@ int App::run(void)
             gl_fps = gl_fps_meter.get_fps();
             std::stringstream ss;
             ss << std::fixed << std::setprecision(2) << gl_fps;
-            std::string title_string = "ICP Project [FPS: " + ss.str() + ", VSync: " + (is_vsync_on ? "ON" : "OFF") + "]";
+            std::string title_string = std::string(WINDOW_TITLE) + " [FPS: " + ss.str() + ", VSync: " + (is_vsync_on ? "ON" : "OFF") + "]";
             glfwSetWindowTitle(window, title_string.c_str());
         }
 

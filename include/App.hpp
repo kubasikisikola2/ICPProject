@@ -105,5 +105,7 @@ private:
     float FOV_degrees = 60.0f;
     glm::mat4 projection_matrix = glm::identity<glm::mat4>();
     Camera camera;
+
+    cv::Mat screenshot;
 };
 
