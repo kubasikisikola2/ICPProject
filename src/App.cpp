@@ -310,9 +310,10 @@ int App::run(void)
     FpsMeter gl_fps_meter(std::chrono::milliseconds(FPS_METER_INTERVAL));
     double gl_fps{ 0.0 }; //unintentional surprised face LOL!
 
-    cv::Mat frame;
-    cv::Point2f center;
     std::string fps_string;
+
+    cv::Mat face_frame;
+    std::vector<cv::Point2f> face_pos;
 
     int baseline = 0;
     cv::Size fps_text_size = cv::getTextSize(fps_string, cv::FONT_HERSHEY_SIMPLEX, FPS_TEXT_FONT_SCALE, FPS_TEXT_LINE_WIDTH, &baseline);
@@ -331,6 +332,8 @@ int App::run(void)
     double begin_time = now;
     double last_time = now; // so that delta time is 0 at the beginning
 
+    bool paused_by_tracker = false;
+
     glClearColor(0, 0, 0, 0);
 
     float triangle_animation_speed = 120.0;
@@ -346,6 +349,48 @@ int App::run(void)
 
     while (!glfwWindowShouldClose(window))
     {
+        // Find face
+        if (tracker_buffer_empty) {
+            std::cout << "Couldn't get new frame";
+            break;
+        }
+
+        if (!tracker_frame_deque.empty() && !tracker_pos_deque.empty())
+        {
+            face_frame = tracker_frame_deque.pop_front();
+            face_pos = tracker_pos_deque.pop_front();
+            if (face_pos.size() > 0) {
+                draw_cross_normalized(face_frame, face_pos[0], 15);
+            }
+
+            // show frame only when one person is watching
+            if (face_pos.size() == 1) {
+                show_frame = face_frame;
+                paused_by_tracker = false;
+            }
+            else if (face_pos.size() == 0) {
+                cv::resize(image_no_face, show_frame, cv::Size(face_frame.cols, face_frame.rows));
+                paused_by_tracker = true;
+            }
+            else if (face_pos.size() > 1) {
+                cv::resize(image_intruder, show_frame, cv::Size(face_frame.cols, face_frame.rows));
+                paused_by_tracker = true;
+            }
+
+            fps_meter.update();
+
+            if (fps_meter.is_updated()) {
+                double fps = fps_meter.get_fps();
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << fps;
+                fps_string = "FPS: " + ss.str();
+                //std::cout << fps_string << std::endl;
+            }
+
+            cv::putText(show_frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
+            cv::imshow(WINDOW_TITLE, show_frame);
+        }
+
         // ImGui prepare render (only if required)
         if (show_imgui) {
             ImGui_ImplOpenGL3_NewFrame();
@@ -364,6 +409,7 @@ int App::run(void)
         }
 
         //GAME STATE UPDATES HERE
+        bool game_paused = paused_by_key || paused_by_tracker;
         double delta_time = begin_time - last_time;
         double time_step = game_paused ? 0 : game_speed * delta_time;
 
@@ -374,47 +420,6 @@ int App::run(void)
         if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
         {
             scene.at("bunny").rotate(glm::vec3(0.0f, 180.0f * time_step, 0.0f));
-        }
-
-        // TODO reimplement face detection to not block main thread
-        
-        if (tracker_buffer_empty) {
-            std::cout << "Couldn't get new frame";
-            break;
-        }
-         
-       
-        if (!tracker_frame_deque.empty() && !tracker_pos_deque.empty())
-        {
-            cv::Mat frame = tracker_frame_deque.pop_front();
-            std::vector<cv::Point2f> face_pos = tracker_pos_deque.pop_front();
-            if (face_pos.size() > 0) {
-                draw_cross_normalized(frame, face_pos[0], 15);
-            }
-
-            // show frame only when one person is watching
-            if (face_pos.size() == 1) {
-                show_frame = frame;
-            }
-            else if (face_pos.size() == 0) {
-                cv::resize(image_no_face, show_frame, cv::Size(frame.cols, frame.rows));
-            }
-            else if (face_pos.size() > 1) {
-                cv::resize(image_intruder, show_frame, cv::Size(frame.cols, frame.rows));
-            }
-
-            fps_meter.update();
-
-            if (fps_meter.is_updated()) {
-                double fps = fps_meter.get_fps();
-                std::stringstream ss;
-                ss << std::fixed << std::setprecision(2) << fps;
-                fps_string = "FPS: " + ss.str();
-                std::cout << fps_string << std::endl;
-            }
-
-            cv::putText(frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
-            cv::imshow(WINDOW_TITLE, show_frame);
         }
 
         // clear canvas

@@ -64,7 +64,7 @@ private:
     bool is_vsync_on{ true };
     bool show_imgui{ true };
     float game_speed{ 1.0 };
-    bool game_paused{ false };
+    bool paused_by_key{ false };
 
     GLuint shader_prog_ID{ 0 };
     GLuint VBO_ID{ 0 };
