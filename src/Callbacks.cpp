@@ -45,6 +45,9 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 		case GLFW_KEY_TAB:
 			this_inst->show_imgui = !this_inst->show_imgui;
 			break;
+		case GLFW_KEY_P:
+			this_inst->paused_by_key = !this_inst->paused_by_key;
+			break;
 		default:
 			break;
 		}

@@ -391,6 +391,8 @@ int App::run(void)
             cv::imshow(WINDOW_TITLE, show_frame);
         }
 
+        bool game_paused = paused_by_key || paused_by_tracker;
+
         // ImGui prepare render (only if required)
         if (show_imgui) {
             ImGui_ImplOpenGL3_NewFrame();
@@ -409,7 +411,6 @@ int App::run(void)
         }
 
         //GAME STATE UPDATES HERE
-        bool game_paused = paused_by_key || paused_by_tracker;
         double delta_time = begin_time - last_time;
         double time_step = game_paused ? 0 : game_speed * delta_time;
 
@@ -472,7 +473,8 @@ int App::run(void)
             gl_fps = gl_fps_meter.get_fps();
             std::stringstream ss;
             ss << std::fixed << std::setprecision(2) << gl_fps;
-            std::string title_string = std::string(WINDOW_TITLE) + " [FPS: " + ss.str() + ", VSync: " + (is_vsync_on ? "ON" : "OFF") + "]";
+            std::string title_string = std::string(WINDOW_TITLE) + " [" + (game_paused ? "Paused, " : "") + 
+                "FPS: " + ss.str() + ", VSync: " + (is_vsync_on ? "ON" : "OFF") + "]";
             glfwSetWindowTitle(window, title_string.c_str());
         }
 
