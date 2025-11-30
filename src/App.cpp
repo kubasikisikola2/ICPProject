@@ -320,12 +320,12 @@ int App::run(void)
     cv::Scalar fps_text_color(0, 255, 0);
     cv::Mat show_frame;
 
-    /*std::thread tracker_thread(tracker_thread_func,
+    tracker_thread = std::thread(tracker_thread_func,
                                std::ref(capture), 
                                std::ref(tracker_terminate),
                                std::ref(tracker_buffer_empty),
                                std::ref(tracker_frame_deque),
-                               std::ref(tracker_pos_deque));*/
+                               std::ref(tracker_pos_deque));
 
     double now = glfwGetTime();
     double begin_time = now;
@@ -377,53 +377,45 @@ int App::run(void)
         }
 
         // TODO reimplement face detection to not block main thread
-        /*
+        
         if (tracker_buffer_empty) {
             std::cout << "Couldn't get new frame";
             break;
         }
          
        
-        tracker_frame_deque.wait();
-        cv::Mat frame = tracker_frame_deque.pop_front();
+        if (!tracker_frame_deque.empty() && !tracker_pos_deque.empty())
+        {
+            cv::Mat frame = tracker_frame_deque.pop_front();
+            std::vector<cv::Point2f> face_pos = tracker_pos_deque.pop_front();
+            if (face_pos.size() > 0) {
+                draw_cross_normalized(frame, face_pos[0], 15);
+            }
 
-        tracker_pos_deque.wait();
-        std::vector<cv::Point2f> face_pos = tracker_pos_deque.pop_front();
-        
-        if (face_pos.size() > 0) {
-            draw_cross_normalized(frame, face_pos[0], 15);
-        }
-        // show frame only when one person is watching
-        if (face_pos.size() == 1) {
-            show_frame = frame;
-        }
-        else if (face_pos.size() == 0) {
-            cv::resize(image_no_face, show_frame, cv::Size(frame.cols, frame.rows));
-        }
-        else if (face_pos.size() > 1) {
-            cv::resize(image_intruder, show_frame, cv::Size(frame.cols, frame.rows));
-        }
-        
-        fps_meter.update();
+            // show frame only when one person is watching
+            if (face_pos.size() == 1) {
+                show_frame = frame;
+            }
+            else if (face_pos.size() == 0) {
+                cv::resize(image_no_face, show_frame, cv::Size(frame.cols, frame.rows));
+            }
+            else if (face_pos.size() > 1) {
+                cv::resize(image_intruder, show_frame, cv::Size(frame.cols, frame.rows));
+            }
 
-        if (fps_meter.is_updated()) {
-            double fps = fps_meter.get_fps();
-            std::stringstream ss;
-            ss << std::fixed << std::setprecision(2) << fps;
-            fps_string = "FPS: " + ss.str();
-            std::cout << fps_string << std::endl;
-        }
-        
+            fps_meter.update();
 
-        cv::putText(frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
-        cv::imshow(WINDOW_TITLE, show_frame);
-        int key = cv::waitKey(1);
-        if (key == 27 || glfwWindowShouldClose(window)) {
-            tracker_terminate = true;
-            tracker_thread.join();
-            break;
+            if (fps_meter.is_updated()) {
+                double fps = fps_meter.get_fps();
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << fps;
+                fps_string = "FPS: " + ss.str();
+                std::cout << fps_string << std::endl;
+            }
+
+            cv::putText(frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
+            cv::imshow(WINDOW_TITLE, show_frame);
         }
-        */
 
         // clear canvas
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -487,6 +479,12 @@ int App::run(void)
 
 void App::destroy(void)
 {
+    // Terminate tracker
+    if (tracker_thread.joinable())
+    {
+        tracker_terminate = true;
+        tracker_thread.join();
+    }
     // clean up ImGUI
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

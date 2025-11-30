@@ -86,6 +86,7 @@ private:
     std::atomic<bool> tracker_buffer_empty;
     std::vector<cv::Point2f> tracker_result;
     std::mutex points_result_mutex;
+    std::thread tracker_thread;
 
     //this is just for image display in the main thread
     //pos deque to make the crosshair synchronized with the image
