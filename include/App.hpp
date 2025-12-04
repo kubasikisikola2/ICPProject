@@ -64,7 +64,7 @@ private:
     bool is_vsync_on{ true };
     bool show_imgui{ true };
     float game_speed{ 1.0 };
-    bool game_paused{ false };
+    bool paused_by_key{ false };
 
     GLuint shader_prog_ID{ 0 };
     GLuint VBO_ID{ 0 };
@@ -86,6 +86,7 @@ private:
     std::atomic<bool> tracker_buffer_empty;
     std::vector<cv::Point2f> tracker_result;
     std::mutex points_result_mutex;
+    std::thread tracker_thread;
 
     //this is just for image display in the main thread
     //pos deque to make the crosshair synchronized with the image
@@ -105,5 +106,7 @@ private:
     float FOV_degrees = 60.0f;
     glm::mat4 projection_matrix = glm::identity<glm::mat4>();
     Camera camera;
+
+    cv::Mat screenshot;
 };
 

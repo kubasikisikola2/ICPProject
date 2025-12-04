@@ -16,3 +16,7 @@
 #define NEAR_CLIP_PLANE 0.1f
 #define NEAR_CLIP_PLANE 0.1f
 #define FAR_CLIP_PLANE 20000.0f
+
+//screenshot config
+#define SCREENSHOT_FILE_NAME "Screenshot"
+#define SCREENSHOT_TIMESTAMP_FORMAT "%F_%H-%M-%S"

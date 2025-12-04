@@ -52,6 +52,8 @@ void App::init_glfw()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    
+    glfwWindowHint(GLFW_SAMPLES, 4);
 
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
@@ -105,6 +107,15 @@ void App::init_glew()
     }
     else
         std::cout << "GL_DEBUG NOT SUPPORTED!" << std::endl;
+
+    if (GLEW_ARB_multisample)
+    {
+        std::cout << "GL antialiasing is supported." << std::endl;
+    }
+    else
+    {
+        std::cout << "GL antialiasing is NOT supported." << std::endl;
+    }
 
     glEnable(GL_DEPTH_TEST);
 }
@@ -251,6 +262,11 @@ bool App::init()
             throw std::runtime_error("Directory 'resources' not found. Various media files are expected to be there.");
         }
 
+        if (!std::filesystem::exists("../screenshots"))
+        {
+            std::filesystem::create_directory("../screenshots");
+        }
+
         init_opencv();
 
         init_glfw();
@@ -294,9 +310,10 @@ int App::run(void)
     FpsMeter gl_fps_meter(std::chrono::milliseconds(FPS_METER_INTERVAL));
     double gl_fps{ 0.0 }; //unintentional surprised face LOL!
 
-    cv::Mat frame;
-    cv::Point2f center;
     std::string fps_string;
+
+    cv::Mat face_frame;
+    std::vector<cv::Point2f> face_pos;
 
     int baseline = 0;
     cv::Size fps_text_size = cv::getTextSize(fps_string, cv::FONT_HERSHEY_SIMPLEX, FPS_TEXT_FONT_SCALE, FPS_TEXT_LINE_WIDTH, &baseline);
@@ -304,16 +321,18 @@ int App::run(void)
     cv::Scalar fps_text_color(0, 255, 0);
     cv::Mat show_frame;
 
-    /*std::thread tracker_thread(tracker_thread_func,
+    tracker_thread = std::thread(tracker_thread_func,
                                std::ref(capture), 
                                std::ref(tracker_terminate),
                                std::ref(tracker_buffer_empty),
                                std::ref(tracker_frame_deque),
-                               std::ref(tracker_pos_deque));*/
+                               std::ref(tracker_pos_deque));
 
     double now = glfwGetTime();
     double begin_time = now;
     double last_time = now; // so that delta time is 0 at the beginning
+
+    bool paused_by_tracker = false;
 
     glClearColor(0, 0, 0, 0);
 
@@ -323,12 +342,57 @@ int App::run(void)
     glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
     glViewport(0, 0, viewport_width, viewport_height);
     update_projection_matrix();
+    screenshot.create(viewport_height, viewport_width, CV_8UC3);
 
     //set initial camera position
     //camera.Position = glm::vec3(0, 0, 10);
 
     while (!glfwWindowShouldClose(window))
     {
+        // Find face
+        if (tracker_buffer_empty) {
+            std::cout << "Couldn't get new frame";
+            break;
+        }
+
+        if (!tracker_frame_deque.empty() && !tracker_pos_deque.empty())
+        {
+            face_frame = tracker_frame_deque.pop_front();
+            face_pos = tracker_pos_deque.pop_front();
+            if (face_pos.size() > 0) {
+                draw_cross_normalized(face_frame, face_pos[0], 15);
+            }
+
+            // show frame only when one person is watching
+            if (face_pos.size() == 1) {
+                show_frame = face_frame;
+                paused_by_tracker = false;
+            }
+            else if (face_pos.size() == 0) {
+                cv::resize(image_no_face, show_frame, cv::Size(face_frame.cols, face_frame.rows));
+                paused_by_tracker = true;
+            }
+            else if (face_pos.size() > 1) {
+                cv::resize(image_intruder, show_frame, cv::Size(face_frame.cols, face_frame.rows));
+                paused_by_tracker = true;
+            }
+
+            fps_meter.update();
+
+            if (fps_meter.is_updated()) {
+                double fps = fps_meter.get_fps();
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << fps;
+                fps_string = "FPS: " + ss.str();
+                //std::cout << fps_string << std::endl;
+            }
+
+            cv::putText(show_frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
+            cv::imshow(WINDOW_TITLE, show_frame);
+        }
+
+        bool game_paused = paused_by_key || paused_by_tracker;
+
         // ImGui prepare render (only if required)
         if (show_imgui) {
             ImGui_ImplOpenGL3_NewFrame();
@@ -359,55 +423,6 @@ int App::run(void)
             scene.at("bunny").rotate(glm::vec3(0.0f, 180.0f * time_step, 0.0f));
         }
 
-        // TODO reimplement face detection to not block main thread
-        /*
-        if (tracker_buffer_empty) {
-            std::cout << "Couldn't get new frame";
-            break;
-        }
-         
-       
-        tracker_frame_deque.wait();
-        cv::Mat frame = tracker_frame_deque.pop_front();
-
-        tracker_pos_deque.wait();
-        std::vector<cv::Point2f> face_pos = tracker_pos_deque.pop_front();
-        
-        if (face_pos.size() > 0) {
-            draw_cross_normalized(frame, face_pos[0], 15);
-        }
-        // show frame only when one person is watching
-        if (face_pos.size() == 1) {
-            show_frame = frame;
-        }
-        else if (face_pos.size() == 0) {
-            cv::resize(image_no_face, show_frame, cv::Size(frame.cols, frame.rows));
-        }
-        else if (face_pos.size() > 1) {
-            cv::resize(image_intruder, show_frame, cv::Size(frame.cols, frame.rows));
-        }
-        
-        fps_meter.update();
-
-        if (fps_meter.is_updated()) {
-            double fps = fps_meter.get_fps();
-            std::stringstream ss;
-            ss << std::fixed << std::setprecision(2) << fps;
-            fps_string = "FPS: " + ss.str();
-            std::cout << fps_string << std::endl;
-        }
-        
-
-        cv::putText(frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
-        cv::imshow(WINDOW_TITLE, show_frame);
-        int key = cv::waitKey(1);
-        if (key == 27 || glfwWindowShouldClose(window)) {
-            tracker_terminate = true;
-            tracker_thread.join();
-            break;
-        }
-        */
-
         // clear canvas
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -433,6 +448,19 @@ int App::run(void)
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         }
 
+        if (glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS)
+        {
+            glReadPixels(0, 0, screenshot.cols, screenshot.rows, GL_BGR, GL_UNSIGNED_BYTE, screenshot.data);
+            cv::flip(screenshot, screenshot, 0);
+            auto screenshot_now = std::chrono::system_clock::now();
+            auto screenshot_time_t = std::chrono::system_clock::to_time_t(screenshot_now);
+            std::stringstream filename;
+            filename << "../screenshots/" + std::string(SCREENSHOT_FILE_NAME) + '_';
+            filename << std::put_time(std::localtime(&screenshot_time_t), SCREENSHOT_TIMESTAMP_FORMAT);
+            filename << ".jpg";
+            cv::imwrite(filename.str().c_str(), screenshot);
+        }
+
         glfwSwapBuffers(window);
 
         now = glfwGetTime();
@@ -445,7 +473,8 @@ int App::run(void)
             gl_fps = gl_fps_meter.get_fps();
             std::stringstream ss;
             ss << std::fixed << std::setprecision(2) << gl_fps;
-            std::string title_string = "ICP Project [FPS: " + ss.str() + ", VSync: " + (is_vsync_on ? "ON" : "OFF") + "]";
+            std::string title_string = std::string(WINDOW_TITLE) + " [" + (game_paused ? "Paused, " : "") + 
+                "FPS: " + ss.str() + ", VSync: " + (is_vsync_on ? "ON" : "OFF") + "]";
             glfwSetWindowTitle(window, title_string.c_str());
         }
 
@@ -457,6 +486,12 @@ int App::run(void)
 
 void App::destroy(void)
 {
+    // Terminate tracker
+    if (tracker_thread.joinable())
+    {
+        tracker_terminate = true;
+        tracker_thread.join();
+    }
     // clean up ImGUI
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

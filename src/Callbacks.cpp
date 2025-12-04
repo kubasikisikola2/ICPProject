@@ -42,8 +42,11 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 			glfwSwapInterval(this_inst->is_vsync_on);
 			std::cout << "VSync: " << this_inst->is_vsync_on << "\n";
 			break;
-		case GLFW_KEY_D:
+		case GLFW_KEY_TAB:
 			this_inst->show_imgui = !this_inst->show_imgui;
+			break;
+		case GLFW_KEY_P:
+			this_inst->paused_by_key = !this_inst->paused_by_key;
 			break;
 		default:
 			break;
@@ -64,6 +67,7 @@ void App::glfw_framebuffer_size_callback(GLFWwindow* window, int width, int heig
 	this_inst->viewport_width = width;
 	this_inst->viewport_height = height;
 
+	this_inst->screenshot.create(height, width, CV_8UC3);
 	// set viewport
 	glViewport(0, 0, width, height);
 	//now your canvas has [0,0] in bottom left corner, and its size is [width x height] 
