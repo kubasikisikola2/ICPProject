@@ -1,6 +1,6 @@
 ﻿cmake_minimum_required(VERSION 3.10)
 
-project(ICPProject1 VERSION 2025.09.30 LANGUAGES CXX)
+project(ICPProject1 VERSION 2025.09.30 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -36,7 +36,10 @@ add_executable(ICPProject1
     "src/FpsMeter.cpp"
     "src/TrackerThread.cpp"
     "src/Callbacks.cpp"
- "src/ShaderProgram.cpp" "src/ObjectLoader.cpp")
+    "src/ShaderProgram.cpp"
+    "src/ObjectLoader.cpp"
+    "src/miniaudio.c"
+    "src/AudioManager.cpp")
 
 target_link_libraries(ICPProject1 PRIVATE
     fmt::fmt
@@ -55,9 +58,5 @@ endif()
 target_include_directories(ICPProject1 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${OpenCV_INCLUDE_DIRS}
-)
-
-target_include_directories(ICPProject1
-    PRIVATE
-        ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/include
 )

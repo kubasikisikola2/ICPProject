@@ -38,6 +38,7 @@ private:
     void init_opencv();
     void init_assets();
     void init_imgui();
+    void load_music();
 
     void check_gl_version();
 
@@ -65,6 +66,7 @@ private:
     bool show_imgui{ true };
     float game_speed{ 1.0 };
     bool paused_by_key{ false };
+    bool muted{ false };
 
     GLuint shader_prog_ID{ 0 };
     GLuint VBO_ID{ 0 };

@@ -5,6 +5,8 @@
 
 #include "App.hpp"
 
+#include "AudioManager.hpp"
+
 void App::glfw_cursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	auto app = static_cast<App*>(glfwGetWindowUserPointer(window));
 
@@ -47,6 +49,18 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 			break;
 		case GLFW_KEY_P:
 			this_inst->paused_by_key = !this_inst->paused_by_key;
+			break;
+		case GLFW_KEY_M:
+			if (this_inst->muted)
+			{
+				AudioManager::getInstance().playBGM("Doom");
+				this_inst->muted = false;
+			}
+			else
+			{
+				AudioManager::getInstance().stopAll();
+				this_inst->muted = true;
+			}
 			break;
 		default:
 			break;

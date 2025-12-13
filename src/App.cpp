@@ -22,6 +22,7 @@
 
 #include "App.hpp"
 #include "ObjectLoader.hpp"
+#include "AudioManager.hpp"
 
 App::App()
 {
@@ -252,6 +253,30 @@ void App::init_imgui()
     std::cout << "ImGUI version: " << ImGui::GetVersion() << "\n";
 }
 
+void App::load_music()
+{
+    std::vector<std::pair<std::string, std::string>> name_filename_pairs = {
+        {"Doom", "../resources/music/03_E1M1_At_Doom_s_Gate.mp3"},
+        {"ouch", "../resources/sfx/ouch.wav"},
+        {"step1", "../resources/sfx/step1.wav"},
+        {"step2", "../resources/sfx/step2.wav"}
+    };
+
+    bool success = true;
+    for (auto name_filename : name_filename_pairs)
+    {
+        if (!AudioManager::getInstance().load(name_filename.first, name_filename.second))
+        {
+            success = false;
+        }
+    }
+    
+    if (!success)
+    {
+        throw std::runtime_error("Failed to load one or multiple sound files");
+    }
+}
+
 bool App::init()
 {
     try {
@@ -282,6 +307,8 @@ bool App::init()
         glfwSwapInterval(is_vsync_on ? 1 : 0); // vsync
 
         init_assets();
+
+        load_music();
 
         init_imgui();
 
@@ -347,6 +374,8 @@ int App::run(void)
     //set initial camera position
     //camera.Position = glm::vec3(0, 0, 10);
 
+    AudioManager::getInstance().playBGM("Doom");
+
     while (!glfwWindowShouldClose(window))
     {
         // Find face
@@ -406,7 +435,7 @@ int App::run(void)
             ImGui::Text("V-Sync: %s", is_vsync_on ? "ON" : "OFF");
             ImGui::Text("FPS: %.1f", gl_fps);
             ImGui::Text("(press RMB to release mouse)");
-            ImGui::Text("(hit D to show/hide info)");
+            ImGui::Text("(hit D to show/hide GUI)");
             ImGui::End();
         }
 
