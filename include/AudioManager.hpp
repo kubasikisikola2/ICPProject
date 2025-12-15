@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <filesystem>
 #include <mutex>
+#include <queue>
 
 class AudioManager {
 public:
@@ -39,11 +40,19 @@ private:
 		}
 
 		ma_engine_listener_set_world_up(&engine, 0, 0.0f, 1.0f, 0.0f);
+
+		// Don't understand why it needs to be created like this instead of just std::thread(fin_snd_collector_func)
+		// Nor do I understand how it works and can't find an explanation of this anywhere
+		// But it does work :-)
+		fin_snd_collector_thread = std::thread(&AudioManager::fin_snd_collector_func, this);
 	};
 
 	~AudioManager()
 	{
 		stopAll();
+		fin_snd_collector_finish = true;
+		cv_fin_snd_collector_sleep.notify_one();
+		fin_snd_collector_thread.join();
 		ma_engine_uninit(&engine);
 	};
 
@@ -53,8 +62,18 @@ private:
 
 	std::unordered_set<ma_sound*> active_sounds;
 	std::mutex mut_active_sounds;
+	std::queue<ma_sound*> finished_sounds;
+	std::mutex mut_finished_sounds;
+
+	// This is necessary because calling sound_uninit() from within the callback breaks the sound engine and the miniaudio
+	// documentation forbids this
+	std::condition_variable cv_fin_snd_collector_sleep;
+	std::mutex mut_fin_snd_collector_sleep;
+	std::atomic_bool fin_snd_collector_finish;
+	std::thread fin_snd_collector_thread;
+	void fin_snd_collector_func();
+
 	ma_sound active_bgm{};
-	std::mutex mut_active_bgm;
 
 	static void sound_end_callback(void* pUserData, ma_sound* pSound);
 	static void bgm_end_callback(void* pUserData, ma_sound* pSound);

@@ -101,6 +101,7 @@ void App::glfw_mouse_button_callback(GLFWwindow* window, int button, int action,
 			else {
 				// we are already inside our game: shoot, click, etc.
 				std::cout << "Bang!\n";
+				AudioManager::getInstance().play2D("ouch");
 			}
 			break;
 		}

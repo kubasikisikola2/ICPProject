@@ -92,7 +92,6 @@ bool AudioManager::play2D(const std::string& name)
 
 bool AudioManager::playBGM(const std::string& name)
 {
-	std::lock_guard<std::mutex> lg(mut_active_bgm);
 	if (ma_sound_is_playing(&active_bgm))
 	{
 		ma_sound_stop(&active_bgm);
@@ -141,6 +140,24 @@ void AudioManager::stopAll()
 	active_sounds.clear();
 }
 
+void AudioManager::fin_snd_collector_func()
+{
+	while (!fin_snd_collector_finish)
+	{
+		std::unique_lock<std::mutex> ul(mut_fin_snd_collector_sleep);
+		cv_fin_snd_collector_sleep.wait(ul);
+
+		std::lock_guard<std::mutex> lg(mut_finished_sounds);
+		while (!finished_sounds.empty())
+		{
+			ma_sound* snd = finished_sounds.front();
+			finished_sounds.pop();
+			ma_sound_uninit(snd);
+			delete snd;
+		}
+	}
+}
+
 void AudioManager::sound_end_callback(void* pUserData, ma_sound* pSound)
 {
 	auto t = static_cast<AudioManager*>(pUserData);
@@ -148,18 +165,19 @@ void AudioManager::sound_end_callback(void* pUserData, ma_sound* pSound)
 		std::lock_guard<std::mutex> lg(t->mut_active_sounds);
 		t->active_sounds.erase(pSound);
 	}
-	ma_sound_uninit(pSound);
-	delete pSound;
+	{
+		std::lock_guard<std::mutex> lg(t->mut_finished_sounds);
+		t->finished_sounds.push(pSound);
+	}
+	t->cv_fin_snd_collector_sleep.notify_one();
 }
 
 void AudioManager::bgm_end_callback(void* pUserData, ma_sound* pSound)
 {
 	auto t = static_cast<AudioManager*>(pUserData);
-	std::lock_guard<std::mutex> lg(t->mut_active_bgm);
 	ma_sound_seek_to_pcm_frame(pSound, 0);
 	if (ma_sound_start(pSound) != MA_SUCCESS)
 	{
-		ma_sound_uninit(pSound);
 		std::cerr << "Failed to replay BGM!" << std::endl;
 	}
 }
