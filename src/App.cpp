@@ -304,6 +304,11 @@ bool App::init()
         print_glfw_info();
         print_glm_info();
 
+        if (!AudioManager::getInstance().initMicrophone())
+        {
+            throw std::runtime_error("Microphone init failed");
+        }
+
         glfwSwapInterval(is_vsync_on ? 1 : 0); // vsync
 
         init_assets();

@@ -140,6 +140,44 @@ void AudioManager::stopAll()
 	active_sounds.clear();
 }
 
+bool AudioManager::initMicrophone()
+{
+	ma_device_config micConfig;
+	micConfig = ma_device_config_init(ma_device_type_capture);
+	micConfig.capture.format = ma_format_f32;
+	micConfig.capture.channels = 1;
+	micConfig.sampleRate = 0; // Use native sample rate
+	micConfig.dataCallback = mic_callback;
+	micConfig.periodSizeInFrames = MIC_BUFFER_FRAMES;
+
+	if (ma_device_init(NULL, &micConfig, &microphone))
+	{
+		std::cerr << "Failed to initialize microphone." << std::endl;
+		return false;
+	}
+
+	if (ma_device_start(&microphone))
+	{
+		std::cerr << "Failed to start microphone." << std::endl;
+		ma_device_uninit(&microphone);
+		return false;
+	}
+
+	int bytesPerFrame = ma_get_bytes_per_frame(micConfig.capture.format, micConfig.capture.channels);
+	int totalBytes = MIC_BUFFER_FRAMES * bytesPerFrame;
+
+	std::cout << "Microphone configuration" << std::endl;
+	std::cout << "Sample rate: " << microphone.sampleRate << " Hz" << std::endl;
+	std::cout << "Buffer size: " << MIC_BUFFER_FRAMES << " frames, " << totalBytes << " bytes" << std::endl;
+
+	return true;
+}
+
+float AudioManager::getMicLoudness()
+{
+	return mic_loudness;
+}
+
 void AudioManager::fin_snd_collector_func()
 {
 	while (!fin_snd_collector_finish)
@@ -180,4 +218,18 @@ void AudioManager::bgm_end_callback(void* pUserData, ma_sound* pSound)
 	{
 		std::cerr << "Failed to replay BGM!" << std::endl;
 	}
+}
+
+void AudioManager::mic_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
+{
+	const float* pInputFloat = (float*)pInput;
+
+	float sumSquares{};
+	for (ma_uint32 i = 0; i < frameCount; ++i)
+	{
+		sumSquares += pInputFloat[i] * pInputFloat[i];
+	}
+	float rms = std::sqrt(sumSquares / frameCount);
+
+	AudioManager::getInstance().mic_loudness = rms;
 }

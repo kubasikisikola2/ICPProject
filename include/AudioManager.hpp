@@ -31,6 +31,9 @@ public:
 
 	void stopBGM();
 	void stopAll();
+
+	bool initMicrophone();
+	float getMicLoudness();
 private:
 	AudioManager()
 	{
@@ -49,6 +52,11 @@ private:
 
 	~AudioManager()
 	{
+		if (ma_device_is_started(&microphone))
+		{
+			ma_device_uninit(&microphone);
+		}
+
 		stopAll();
 		fin_snd_collector_finish = true;
 		cv_fin_snd_collector_sleep.notify_one();
@@ -77,4 +85,8 @@ private:
 
 	static void sound_end_callback(void* pUserData, ma_sound* pSound);
 	static void bgm_end_callback(void* pUserData, ma_sound* pSound);
+
+	ma_device microphone{};
+	std::atomic<float> mic_loudness;
+	static void mic_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
 };
