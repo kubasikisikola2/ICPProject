@@ -122,8 +122,11 @@ bool AudioManager::playBGM(const std::string& name)
 
 void AudioManager::stopBGM()
 {
-	ma_sound_stop(&active_bgm);
-	ma_sound_uninit(&active_bgm);
+	if (ma_sound_is_playing(&active_bgm))
+	{
+		ma_sound_stop(&active_bgm);
+		ma_sound_uninit(&active_bgm);
+	}
 }
 
 void AudioManager::stopAll()
