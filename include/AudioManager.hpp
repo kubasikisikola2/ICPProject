@@ -74,7 +74,7 @@ private:
 	std::mutex mut_finished_sounds;
 
 	// This is necessary because calling sound_uninit() from within the callback breaks the sound engine and the miniaudio
-	// documentation forbids this
+	// documentation warns against this
 	std::condition_variable cv_fin_snd_collector_sleep;
 	std::mutex mut_fin_snd_collector_sleep;
 	std::atomic_bool fin_snd_collector_finish;

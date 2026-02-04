@@ -434,11 +434,12 @@ int App::run(void)
             ImGui::NewFrame();
             //ImGui::ShowDemoWindow(); // Enable mouse when using Demo!
             ImGui::SetNextWindowPos(ImVec2(10, 10));
-            ImGui::SetNextWindowSize(ImVec2(250, 100));
+            ImGui::SetNextWindowSize(ImVec2(250, 120));
 
             ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
             ImGui::Text("V-Sync: %s", is_vsync_on ? "ON" : "OFF");
             ImGui::Text("FPS: %.1f", gl_fps);
+            ImGui::Text("Microphone RMS: %.3f", AudioManager::getInstance().getMicLoudness());
             ImGui::Text("(press RMB to release mouse)");
             ImGui::Text("(hit D to show/hide GUI)");
             ImGui::End();
