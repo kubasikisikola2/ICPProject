@@ -62,6 +62,22 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 				this_inst->muted = true;
 			}
 			break;
+		case GLFW_KEY_F11:
+			if (this_inst->fullscreen)
+			{
+				this_inst->fullscreen = false;
+				glfwSetWindowMonitor(window, NULL, this_inst->window_pos_x, this_inst->window_pos_y, this_inst->window_width, this_inst->window_height, GLFW_DONT_CARE);
+				glfwSwapInterval(this_inst->is_vsync_on);
+			}
+			else
+			{
+				this_inst->fullscreen = true;
+				GLFWmonitor* monitor = get_current_monitor(window);
+				const GLFWvidmode* video_mode = glfwGetVideoMode(monitor);
+				glfwSetWindowMonitor(window, monitor, 0, 0, video_mode->width, video_mode->height, GLFW_DONT_CARE);
+				glfwSwapInterval(this_inst->is_vsync_on);
+			}
+			break;
 		default:
 			break;
 		}
@@ -87,6 +103,12 @@ void App::glfw_framebuffer_size_callback(GLFWwindow* window, int width, int heig
 	//now your canvas has [0,0] in bottom left corner, and its size is [width x height] 
 
 	this_inst->update_projection_matrix();
+
+	if (!this_inst->fullscreen)
+	{
+		this_inst->window_width = width;
+		this_inst->window_height = height;
+	}
 }
 
 void App::glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
@@ -160,4 +182,14 @@ void GLAPIENTRY App::MessageCallback(GLenum source, GLenum type, GLuint id, GLen
 		", severity = " << severity_str <<
 		", ID = '" << id << '\'' <<
 		", message = '" << message << '\'' << std::endl;
+}
+
+void App::glfw_windowPositionCallback(GLFWwindow* window, int xpos, int ypos)
+{
+	auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
+	if (!this_inst->fullscreen)
+	{
+		this_inst->window_pos_x = xpos;
+		this_inst->window_pos_y = ypos;
+	}
 }
