@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp> 
 
+#pragma pack(push, 1)
 struct Vertex {
     glm::vec3 position;
     glm::vec3 normal;
@@ -13,3 +14,6 @@ struct Vertex {
             && texCoords == v1.texCoords);
     }
 };
+#pragma pack(pop)
+
+

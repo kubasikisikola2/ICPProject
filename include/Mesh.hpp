@@ -9,6 +9,12 @@
 
 #include "assets.hpp"
 #include "NonCopyable.hpp"
+#include <memory>  
+#include <iostream>
+
+
+
+
 
 class Mesh : private NonCopyable
 {
@@ -23,6 +29,8 @@ public:
 
     Mesh(std::vector<Vertex> const& vertices, GLenum primitive_type) : primitive_type_{ primitive_type }
     {
+     //   std::cout << "printing texture coordinates" << std::endl;
+       // printVertices(vertices);
         glCreateVertexArrays(1, &vao_);
 
         glVertexArrayAttribFormat(vao_, attribute_location_position, glm::vec3::length(), GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
@@ -47,6 +55,26 @@ public:
         count_ = static_cast<GLsizei>(vertices.size());
     }
 
+    void printVec2(const glm::vec2& v) {
+        std::cout << "(" << v.x << ", " << v.y << ")";
+    }
+
+    // Helper function to print a glm::vec3
+    void printVec3(const glm::vec3& v) {
+        std::cout << "(" << v.x << ", " << v.y << ", " << v.z << ")";
+    }
+
+    // Print all vertices in the vector
+    void printVertices(const std::vector<Vertex>& vertices) {
+        for (size_t i = 0; i < vertices.size(); ++i) {
+            const auto& v = vertices[i];
+            std::cout << "Vertex " << i << ":\n";
+            std::cout << "  Position: "; printVec3(v.position); std::cout << "\n";
+            std::cout << "  Normal:   "; printVec3(v.normal);   std::cout << "\n";
+            std::cout << "  TexCoord: "; printVec2(v.texCoords); std::cout << "\n";
+        }
+    }
+
     // Mesh with indirect vertex addressing. Needs compiled shader for attributes setup. 
     Mesh(std::vector<Vertex> const& vertices, std::vector<GLuint> const& indices, GLenum primitive_type) :
         Mesh{ vertices, primitive_type }
@@ -62,6 +90,7 @@ public:
     }
 
     void draw() {
+
         glBindVertexArray(vao_);
         if (ebo_ == 0) {
             glDrawArrays(primitive_type_, 0, count_);
@@ -77,6 +106,57 @@ public:
         glDeleteVertexArrays(1, &vao_);
     }
 
+    static std::shared_ptr<Mesh> generateCube() {
+        std::vector<Vertex> V{
+            // Front face (+Z)
+            {{-0.5f, -0.5f,  0.5f}, {0,0,1}, {0,0}},
+            {{ 0.5f, -0.5f,  0.5f}, {0,0,1}, {1,0}},
+            {{ 0.5f,  0.5f,  0.5f}, {0,0,1}, {1,1}},
+            {{-0.5f,  0.5f,  0.5f}, {0,0,1}, {0,1}},
+
+            // Back face (-Z)
+            {{ 0.5f, -0.5f, -0.5f}, {0,0,-1}, {0,0}},
+            {{-0.5f, -0.5f, -0.5f}, {0,0,-1}, {1,0}},
+            {{-0.5f,  0.5f, -0.5f}, {0,0,-1}, {1,1}},
+            {{ 0.5f,  0.5f, -0.5f}, {0,0,-1}, {0,1}},
+
+            // Left face (-X)
+            {{-0.5f, -0.5f, -0.5f}, {-1,0,0}, {0,0}},
+            {{-0.5f, -0.5f,  0.5f}, {-1,0,0}, {1,0}},
+            {{-0.5f,  0.5f,  0.5f}, {-1,0,0}, {1,1}},
+            {{-0.5f,  0.5f, -0.5f}, {-1,0,0}, {0,1}},
+
+            // Right face (+X)
+            {{ 0.5f, -0.5f,  0.5f}, {1,0,0}, {0,0}},
+            {{ 0.5f, -0.5f, -0.5f}, {1,0,0}, {1,0}},
+            {{ 0.5f,  0.5f, -0.5f}, {1,0,0}, {1,1}},
+            {{ 0.5f,  0.5f,  0.5f}, {1,0,0}, {0,1}},
+
+            // Top face (+Y)
+            {{-0.5f,  0.5f,  0.5f}, {0,1,0}, {0,0}},
+            {{ 0.5f,  0.5f,  0.5f}, {0,1,0}, {1,0}},
+            {{ 0.5f,  0.5f, -0.5f}, {0,1,0}, {1,1}},
+            {{-0.5f,  0.5f, -0.5f}, {0,1,0}, {0,1}},
+
+            // Bottom face (-Y)
+            {{-0.5f, -0.5f, -0.5f}, {0,-1,0}, {0,0}},
+            {{ 0.5f, -0.5f, -0.5f}, {0,-1,0}, {1,0}},
+            {{ 0.5f, -0.5f,  0.5f}, {0,-1,0}, {1,1}},
+            {{-0.5f, -0.5f,  0.5f}, {0,-1,0}, {0,1}},
+        };
+
+        std::vector<GLuint> I{
+            0, 1, 2, 2, 3, 0,       // Front
+            4, 5, 6, 6, 7, 4,       // Back
+            8, 9,10,10,11, 8,       // Left
+           12,13,14,14,15,12,       // Right
+           16,17,18,18,19,16,       // Top
+           20,21,22,22,23,20        // Bottom
+        };
+
+        return std::make_shared<Mesh>(V, I, GL_TRIANGLES);
+    }
+
 private:
     //safe defaults
     GLenum primitive_type_{ GL_POINTS };
@@ -87,6 +167,5 @@ private:
     GLuint vao_{ 0 };
     GLuint vbo_{ 0 };
     GLuint ebo_{ 0 };
-
-    
 };
+

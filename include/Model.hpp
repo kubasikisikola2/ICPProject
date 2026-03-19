@@ -122,6 +122,8 @@ public:
 
             //calculate and set model matrix 
             glm::mat4 mesh_model_matrix = createMM(mesh_pkg.origin, mesh_pkg.eulerAngles, mesh_pkg.scaleCoeff);
+
+            
             mesh_pkg.shader->setUniform("uM_m", mesh_model_matrix * local_model_matrix);
             mesh_pkg.shader->setUniform("uV_m", view_matrix);
             mesh_pkg.shader->setUniform("uP_m", projection_matrix);
