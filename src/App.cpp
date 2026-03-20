@@ -23,8 +23,8 @@
 
 #include "App.hpp"
 #include "ObjectLoader.hpp"
-#include "MeshGen.cpp"
 #include "AudioManager.hpp"
+#include "MeshGen.hpp"
 
 App::App()
 {
@@ -209,78 +209,6 @@ void App::print_gl_info()
 void App::init_assets(void) {
     //initialize default texture
     Texture::init();
-    // load shaders from file to shader_library 
-    /*
-    shader_library.emplace("simple_shader", std::make_shared<ShaderProgram>(std::filesystem::path("../resources/shaders/basic.vert"), std::filesystem::path("../resources/shaders/basic.frag")));
-    shader_library.emplace("box_shader", std::make_shared<ShaderProgram>(std::filesystem::path(TEXTURE_SHADER_PATH_VERT), std::filesystem::path(TEXTURE_SHADER_PATH_FRAG)));
-
-    // Load mesh
-    std::filesystem::path filename = "../resources/models/triangle.obj";
-    if (!std::filesystem::exists(filename)) {
-        throw std::runtime_error("File does not exist: " + filename.string());
-    }
-
-    std::vector<Vertex> vertices;
-    std::vector<GLuint> indices;
-    if (!loadOBJ(filename, vertices, indices)) {
-        throw std::runtime_error("Loading failed: " + filename.string());
-    }
-
-    auto mesh = std::make_shared<Mesh>(vertices, indices, GL_TRIANGLES);
-
-    auto mesh_ptr = std::make_shared<Mesh>(vertices, indices, GL_TRIANGLES);
-    mesh_library.emplace("simple_mesh", mesh_ptr);
-
-    // Load model and attach mesh
-    Model my_model;
-    my_model.addMesh(mesh_ptr, shader_library.at("simple_shader"), std::make_shared<Texture>());
-   // scene.emplace("simple_object", my_model);
-
-    std::vector<Vertex> vertices2;
-    std::vector<GLuint> indices2;
-    filename = "../resources/models/bunny_tri_vnt.obj";
-    if (!loadOBJ(filename, vertices2, indices2)) {
-        throw std::runtime_error("Loading failed: " + filename.string());
-    }
-   
-    auto mesh2 = std::make_shared<Mesh>(vertices2, indices2, GL_TRIANGLES);
-    mesh_library.emplace("bunny_mesh", mesh_ptr);
-
-    Model model2;
-    my_model.addMesh(mesh2, shader_library.at("box_shader"), std::make_shared<Texture>());
-   // my_model.addMesh(mesh2, shader_library.at("box_shader"), std::make_shared<Texture>("../resources/textures/box_rgb888.png", Texture::Interpolation::linear));
-
-    scene.emplace("bunny", my_model);
-
-
-
-
-    std::vector<Vertex> vertices3;
-    std::vector<GLuint> indices3;
-
-    filename = "../resources/models/cube_triangles_vnt.obj";
-    if (!loadOBJ(filename, vertices3, indices3)) {
-        throw std::runtime_error("Loading failed: " + filename.string());
-
-    }
-    auto mesh_wooden_box = std::make_shared<Mesh>(vertices3, indices3, GL_TRIANGLES);
-    texture_library.emplace("wooden_box", std::make_shared<Texture>("../resources/textures/box_rgb888.png")); 
-    Model wooden_box;
-    wooden_box.setPosition(glm::vec3(5.0f ,1.0f, 1.0f));
-    wooden_box.setScale(glm::vec3(1.0f));
-    mesh_library.emplace("wooden_box", mesh_wooden_box);
-    wooden_box.addMesh(mesh_library.at("wooden_box"), shader_library.at("box_shader"), texture_library.at("wooden_box"));
-    scene.emplace("box", wooden_box);
-
-
-   // texture_library.emplace("wooden_box", std::make_shared<Texture>("../resources/textures/box_rgb888.png"));
-
-
-
-
-   */
-
-
 
     std::filesystem::path filename = "../resources/models/cube_triangles_vnt.obj";
     std::vector<Vertex> v_wooden_box;
@@ -289,16 +217,16 @@ void App::init_assets(void) {
         throw std::runtime_error("Loading failed: " + filename.string());
 
     }
-    auto mesh_wooden_box = Mesh::generateCube();
+    auto mesh_wooden_box = generate_cube_mesh();
 
 
     shader_library.emplace("text_shader", std::make_shared<ShaderProgram>(std::filesystem::path(TEXTURE_SHADER_PATH_VERT), std::filesystem::path(TEXTURE_SHADER_PATH_FRAG)));
     texture_library.emplace("wood_box_text", std::make_shared<Texture>("../resources/textures/box_rgb888.png"));
     mesh_library.emplace("wood_box_mesh", mesh_wooden_box);
-    Model m;
-    m.addMesh(mesh_library.at("wood_box_mesh"), shader_library.at("text_shader"), texture_library.at("wood_box_text"));
-   // scene.emplace("dyntex", m);
-    std::cout << "succesfully initialized assets" << std::endl;
+    Model modelCube;
+    modelCube.addMesh(mesh_library.at("wood_box_mesh"), shader_library.at("text_shader"), texture_library.at("wood_box_text"));
+    scene.emplace("cube", modelCube);
+   
 
 
     std::vector<Vertex> vGun;
@@ -315,8 +243,18 @@ void App::init_assets(void) {
 
     Model gunModel;
     gunModel.addMesh(mesh_library.at("mesh_gun"), shader_library.at("text_shader"), texture_library.at("gun_text"));
-    scene.emplace("knight", gunModel);
+    scene.emplace("gun", gunModel);
 
+
+    mesh_library.emplace("floor_mesh", generate_floor_mesh(20.0f, 20.0f));
+    texture_library.emplace("floor_text", std::make_shared<Texture>("../resources/textures/floor.png"));
+    Model floor_model;
+    //floor_model.setPosition(glm::vec3(0.0f, -1.0f, 0.0f));
+    floor_model.addMesh(mesh_library.at("floor_mesh"), shader_library.at("text_shader"), texture_library.at("floor_text"));
+    scene.emplace("floor", floor_model);
+
+
+    std::cout << "succesfully initialized assets" << std::endl;
 }
 
 void App::init_imgui()
@@ -493,7 +431,7 @@ int App::run(void)
     while (!glfwWindowShouldClose(window))
     {
         // Find face
-        if (tracker_buffer_empty) {
+      /*  if (tracker_buffer_empty) {
             std::cout << "Couldn't get new frame";
             break;
         }
@@ -532,7 +470,7 @@ int App::run(void)
 
             cv::putText(show_frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
             cv::imshow(WINDOW_TITLE, show_frame);
-        }
+        }*/
 
         bool game_paused = paused_by_key || paused_by_tracker;
 

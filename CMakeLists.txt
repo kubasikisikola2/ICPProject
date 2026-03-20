@@ -39,7 +39,8 @@ add_executable(ICPProject1
     "src/ShaderProgram.cpp"
     "src/ObjectLoader.cpp"
     "src/miniaudio.c"
-    "src/AudioManager.cpp")
+    "src/AudioManager.cpp"
+    "src/Texture.cpp" "src/MeshGen.cpp" "src/Player.cpp")
 
 target_link_libraries(ICPProject1 PRIVATE
     fmt::fmt
