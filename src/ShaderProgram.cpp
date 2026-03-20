@@ -157,7 +157,8 @@ GLuint ShaderProgram::link_shader(const std::vector<GLuint> shader_ids) {
     // force OpenGL to use specific slots(locations) for certain vertex attributes,
     // must be set before linking
     glBindAttribLocation(prog_ID, Mesh::attribute_location_position, "aPos");
-    glBindAttribLocation(prog_ID, Mesh::attribute_location_normal, "aColor");
+    glBindAttribLocation(prog_ID, Mesh::attribute_location_normal, "aNorm");
+    glBindAttribLocation(prog_ID, Mesh::attribute_location_texture_coords, "aTex");
 
     glLinkProgram(prog_ID);
 

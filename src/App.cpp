@@ -23,6 +23,7 @@
 
 #include "App.hpp"
 #include "ObjectLoader.hpp"
+#include "MeshGen.cpp"
 #include "AudioManager.hpp"
 
 App::App()
@@ -206,10 +207,13 @@ void App::print_gl_info()
 }
 
 void App::init_assets(void) {
-
+    //initialize default texture
+    Texture::init();
     // load shaders from file to shader_library 
+    /*
     shader_library.emplace("simple_shader", std::make_shared<ShaderProgram>(std::filesystem::path("../resources/shaders/basic.vert"), std::filesystem::path("../resources/shaders/basic.frag")));
- 
+    shader_library.emplace("box_shader", std::make_shared<ShaderProgram>(std::filesystem::path(TEXTURE_SHADER_PATH_VERT), std::filesystem::path(TEXTURE_SHADER_PATH_FRAG)));
+
     // Load mesh
     std::filesystem::path filename = "../resources/models/triangle.obj";
     if (!std::filesystem::exists(filename)) {
@@ -229,8 +233,8 @@ void App::init_assets(void) {
 
     // Load model and attach mesh
     Model my_model;
-    my_model.addMesh(mesh_ptr, shader_library.at("simple_shader"));
-    scene.emplace("simple_object", my_model);
+    my_model.addMesh(mesh_ptr, shader_library.at("simple_shader"), std::make_shared<Texture>());
+   // scene.emplace("simple_object", my_model);
 
     std::vector<Vertex> vertices2;
     std::vector<GLuint> indices2;
@@ -243,8 +247,75 @@ void App::init_assets(void) {
     mesh_library.emplace("bunny_mesh", mesh_ptr);
 
     Model model2;
-    my_model.addMesh(mesh2, shader_library.at("simple_shader"));
+    my_model.addMesh(mesh2, shader_library.at("box_shader"), std::make_shared<Texture>());
+   // my_model.addMesh(mesh2, shader_library.at("box_shader"), std::make_shared<Texture>("../resources/textures/box_rgb888.png", Texture::Interpolation::linear));
+
     scene.emplace("bunny", my_model);
+
+
+
+
+    std::vector<Vertex> vertices3;
+    std::vector<GLuint> indices3;
+
+    filename = "../resources/models/cube_triangles_vnt.obj";
+    if (!loadOBJ(filename, vertices3, indices3)) {
+        throw std::runtime_error("Loading failed: " + filename.string());
+
+    }
+    auto mesh_wooden_box = std::make_shared<Mesh>(vertices3, indices3, GL_TRIANGLES);
+    texture_library.emplace("wooden_box", std::make_shared<Texture>("../resources/textures/box_rgb888.png")); 
+    Model wooden_box;
+    wooden_box.setPosition(glm::vec3(5.0f ,1.0f, 1.0f));
+    wooden_box.setScale(glm::vec3(1.0f));
+    mesh_library.emplace("wooden_box", mesh_wooden_box);
+    wooden_box.addMesh(mesh_library.at("wooden_box"), shader_library.at("box_shader"), texture_library.at("wooden_box"));
+    scene.emplace("box", wooden_box);
+
+
+   // texture_library.emplace("wooden_box", std::make_shared<Texture>("../resources/textures/box_rgb888.png"));
+
+
+
+
+   */
+
+
+
+    std::filesystem::path filename = "../resources/models/cube_triangles_vnt.obj";
+    std::vector<Vertex> v_wooden_box;
+    std::vector<GLuint> i_wooden_box;
+    if (!loadOBJ(filename, v_wooden_box, i_wooden_box)) {
+        throw std::runtime_error("Loading failed: " + filename.string());
+
+    }
+    auto mesh_wooden_box = Mesh::generateCube();
+
+
+    shader_library.emplace("text_shader", std::make_shared<ShaderProgram>(std::filesystem::path(TEXTURE_SHADER_PATH_VERT), std::filesystem::path(TEXTURE_SHADER_PATH_FRAG)));
+    texture_library.emplace("wood_box_text", std::make_shared<Texture>("../resources/textures/box_rgb888.png"));
+    mesh_library.emplace("wood_box_mesh", mesh_wooden_box);
+    Model m;
+    m.addMesh(mesh_library.at("wood_box_mesh"), shader_library.at("text_shader"), texture_library.at("wood_box_text"));
+   // scene.emplace("dyntex", m);
+    std::cout << "succesfully initialized assets" << std::endl;
+
+
+    std::vector<Vertex> vGun;
+    std::vector<GLuint> iGun;
+    filename = "../resources/models/gun.obj";
+    if (!loadOBJ(filename, vGun, iGun)) {
+        throw std::runtime_error("Loading failed: " + filename.string());
+
+    }
+    auto mesh_gun = std::make_shared<Mesh>(vGun, iGun, GL_TRIANGLES);
+
+    texture_library.emplace("gun_text", std::make_shared<Texture>("../resources/textures/gun.jpg"));
+    mesh_library.emplace("mesh_gun", mesh_gun);
+
+    Model gunModel;
+    gunModel.addMesh(mesh_library.at("mesh_gun"), shader_library.at("text_shader"), texture_library.at("gun_text"));
+    scene.emplace("knight", gunModel);
 
 }
 
@@ -493,27 +564,22 @@ int App::run(void)
 
         if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
         {
-            scene.at("bunny").rotate(glm::vec3(0.0f, 180.0f * time_step, 0.0f));
+            //scene.at("bunny").rotate(glm::vec3(0.0f, 180.0f * time_step, 0.0f));
         }
 
         // clear canvas
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // activate shader
-        auto& current_shader = shader_library.at("simple_shader");
-        current_shader->use();
-        current_shader->setUniform("my_color", my_rgba);
+        
         //set View matrix = set CAMERA
         camera.ProcessInput(window, delta_time);
         update_projection_matrix();
         glm::mat4 view_matrix = camera.GetViewMatrix();
-        current_shader->setUniform("uV_m", view_matrix);
-        current_shader->setUniform("uP_m", projection_matrix);
 
         //draw all models from scene
         for (auto &model : scene) {
             model.second.update(now);
-            model.second.draw();
+            model.second.draw(view_matrix, projection_matrix);
         }
 
         if (show_imgui) {

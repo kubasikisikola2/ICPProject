@@ -18,15 +18,17 @@ public:
     GLfloat Pitch = 0.0f;
     GLfloat Roll = 0.0f;
 
+
     // Camera options
-    GLfloat MovementSpeed = 1.0f;
-    GLfloat MouseSensitivity = 0.25f;
+    GLfloat max_speed = 40.0f;
+    GLfloat mouse_sensitivity = 0.25f;
+    GLfloat stop_speed_tresh = 5.0f;
 
     glm::vec3 world_up{ 0.0f, 1.0f, 0.0f };
 
-    glm::vec3 Velocity = glm::vec3(0.0f);
-    float Acceleration = 20.0f;
-    float Drag = 5.0f;
+    glm::vec3 velocity = glm::vec3(0.0f);
+    float acceleration = 100.0f;
+    float drag = 78.0f;
     
     Camera(){
         // Default constructor initializes camera's position and orientation
@@ -43,53 +45,67 @@ public:
     void ProcessInput(GLFWwindow* window, GLfloat deltaTime)
     {
         glm::vec3 direction{ 0 };
+        bool keyPressed = false;
 
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+            direction += Front;
+            keyPressed = true;
+        }
 
-            direction += Front; // add unit vector to final direction  
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+            direction -= Front;
+            keyPressed = true;
+        }
+            
 
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-            direction -= Front; //- (Front * 0.1);//direction -= Front;
-
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
             direction -= Right;
+            keyPressed = true;
+        }
+            
 
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
             direction += Right;
+            keyPressed = true;
+        }
 
-        if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS) {
             direction += Up;
+            keyPressed = true;
+        }
+            
 
-        if (glfwGetKey(window, GLFW_KEY_N) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_N) == GLFW_PRESS) {
             direction -= Up;
-
-
-        //... up, down, diagonal, ... 
+            keyPressed = true;
+        }
 
         if (glm::length(direction) > 0.0001f)
             direction = glm::normalize(direction);
         else
             direction = glm::vec3(0);
 
-        glm::vec3 acceleration = direction * Acceleration;
-        
-        // Apply drag
-        acceleration -= Velocity * Drag;
+        glm::vec3 accelerationTemp = direction * acceleration;
 
-        Velocity += acceleration * deltaTime;
+        // Apply drag and accel
+        accelerationTemp -= velocity * drag * deltaTime;
+        velocity += accelerationTemp * deltaTime;
 
-        // Optional: clamp max speed
-        float maxSpeed = MovementSpeed;
-        if (glm::length(Velocity) > maxSpeed)
-            Velocity = glm::normalize(Velocity) * maxSpeed;
+        // Clamp max speed or when speed is low stop
+        GLfloat absoluteVelocity = glm::length(velocity);
+        if (absoluteVelocity > max_speed)
+            velocity = glm::normalize(velocity) * max_speed;
+        else if (absoluteVelocity <= stop_speed_tresh && !keyPressed){
+            velocity = glm::vec3(0);
+        }
 
-        Position += Velocity;
+        Position += velocity * deltaTime;
     }
 
     void ProcessMouseMovement(GLfloat xoffset, GLfloat yoffset, GLboolean constraintPitch = GL_TRUE)
     {
-        xoffset *= this->MouseSensitivity;
-        yoffset *= this->MouseSensitivity;
+        xoffset *= this->mouse_sensitivity;
+        yoffset *= this->mouse_sensitivity;
 
         this->Yaw += xoffset;
         this->Pitch += yoffset;

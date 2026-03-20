@@ -15,6 +15,7 @@
 #include "Mesh.hpp"
 #include "Model.hpp"
 #include "Camera.hpp"
+#include "Texture.hpp"
 
 class App {
 public:
@@ -105,6 +106,9 @@ private:
 
     //hash map for storing meshes
     std::unordered_map<std::string, std::shared_ptr<Mesh>> mesh_library;
+
+    // hash map for textures
+    std::unordered_map<std::string, std::shared_ptr<Texture>> texture_library;
 
     // all objects on the scene
     std::unordered_map<std::string, Model> scene;

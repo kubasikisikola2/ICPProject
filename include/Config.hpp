@@ -17,6 +17,9 @@
 #define NEAR_CLIP_PLANE 0.1f
 #define FAR_CLIP_PLANE 20000.0f
 
+//file path defines 
+#define TEXTURE_SHADER_PATH_VERT "../resources/shaders/tex.vert"
+#define TEXTURE_SHADER_PATH_FRAG "../resources/shaders/tex.frag"
 //screenshot config
 #define SCREENSHOT_FILE_NAME "Screenshot"
 #define SCREENSHOT_TIMESTAMP_FORMAT "%F_%H-%M-%S"

@@ -12,6 +12,7 @@
 #include "assets.hpp"
 #include "Mesh.hpp"
 #include "ShaderProgram.hpp"
+#include "Texture.hpp"
 
 class Model {
 private:
@@ -26,7 +27,7 @@ private:
     struct mesh_package {
         std::shared_ptr<Mesh> mesh;         // geometry & topology, vertex attributes
         std::shared_ptr<ShaderProgram> shader;     // which shader to use to draw this part of the model
-
+        std::shared_ptr<Texture> texture;
         glm::vec3 origin;                   // mesh origin relative to origin of the whole model
         glm::vec3 eulerAngles;              // mesh rotation relative to orientation of the whole model
         glm::vec3 scaleCoeff{ 1.0f };       // mesh scale relative to scale of the whole model
@@ -66,11 +67,12 @@ public:
 
     void addMesh(std::shared_ptr<Mesh> mesh,
         std::shared_ptr<ShaderProgram> shader,
-        glm::vec3 origin = glm::vec3(0.0f),      // dafault value
-        glm::vec3 eulerAngles = glm::vec3(0.0f), // dafault value
-        glm::vec3 scale = glm::vec3(1.0f)       // dafault value
+        std::shared_ptr<Texture> text,
+        glm::vec3 origin = glm::vec3(0.0f),      // default value
+        glm::vec3 eulerAngles = glm::vec3(0.0f), // default value
+        glm::vec3 scale = glm::vec3(1.0f)       // default value
         ) {
-        meshes.emplace_back(mesh_package{ mesh, shader, origin, eulerAngles, scale });
+        meshes.emplace_back(mesh_package{ mesh, shader, text, origin, eulerAngles, scale});
     }
 
     void setPosition(const glm::vec3& new_position) {
@@ -113,15 +115,20 @@ public:
         //update model logic
     }
 
-    void draw() {
+    void draw(glm::mat4 view_matrix, glm::mat4 projection_matrix) {
         // call draw() on mesh (all meshes)
         for (auto const& mesh_pkg : meshes) {
             mesh_pkg.shader->use(); // select proper shader
 
             //calculate and set model matrix 
             glm::mat4 mesh_model_matrix = createMM(mesh_pkg.origin, mesh_pkg.eulerAngles, mesh_pkg.scaleCoeff);
-            mesh_pkg.shader->setUniform("uM_m", mesh_model_matrix * local_model_matrix);
 
+            
+            mesh_pkg.shader->setUniform("uM_m", mesh_model_matrix * local_model_matrix);
+            mesh_pkg.shader->setUniform("uV_m", view_matrix);
+            mesh_pkg.shader->setUniform("uP_m", projection_matrix);
+            mesh_pkg.texture->bind();
+            mesh_pkg.shader->setUniform("tex0", 0);
             mesh_pkg.mesh->draw();   // draw mesh
         }
     }
