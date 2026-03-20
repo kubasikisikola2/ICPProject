@@ -5,6 +5,8 @@
 
 #include "App.hpp"
 
+#include "AudioManager.hpp"
+
 void App::glfw_cursorPositionCallback(GLFWwindow* window, double xpos, double ypos) {
 	auto app = static_cast<App*>(glfwGetWindowUserPointer(window));
 
@@ -48,6 +50,34 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 		case GLFW_KEY_P:
 			this_inst->paused_by_key = !this_inst->paused_by_key;
 			break;
+		case GLFW_KEY_M:
+			if (this_inst->muted)
+			{
+				AudioManager::getInstance().playBGM("Doom");
+				this_inst->muted = false;
+			}
+			else
+			{
+				AudioManager::getInstance().stopAll();
+				this_inst->muted = true;
+			}
+			break;
+		case GLFW_KEY_F11:
+			if (this_inst->fullscreen)
+			{
+				this_inst->fullscreen = false;
+				glfwSetWindowMonitor(window, NULL, this_inst->window_pos_x, this_inst->window_pos_y, this_inst->window_width, this_inst->window_height, GLFW_DONT_CARE);
+				glfwSwapInterval(this_inst->is_vsync_on);
+			}
+			else
+			{
+				this_inst->fullscreen = true;
+				GLFWmonitor* monitor = get_current_monitor(window);
+				const GLFWvidmode* video_mode = glfwGetVideoMode(monitor);
+				glfwSetWindowMonitor(window, monitor, 0, 0, video_mode->width, video_mode->height, GLFW_DONT_CARE);
+				glfwSwapInterval(this_inst->is_vsync_on);
+			}
+			break;
 		default:
 			break;
 		}
@@ -73,6 +103,12 @@ void App::glfw_framebuffer_size_callback(GLFWwindow* window, int width, int heig
 	//now your canvas has [0,0] in bottom left corner, and its size is [width x height] 
 
 	this_inst->update_projection_matrix();
+
+	if (!this_inst->fullscreen)
+	{
+		this_inst->window_width = width;
+		this_inst->window_height = height;
+	}
 }
 
 void App::glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
@@ -87,6 +123,7 @@ void App::glfw_mouse_button_callback(GLFWwindow* window, int button, int action,
 			else {
 				// we are already inside our game: shoot, click, etc.
 				std::cout << "Bang!\n";
+				AudioManager::getInstance().play2D("ouch");
 			}
 			break;
 		}
@@ -145,4 +182,14 @@ void GLAPIENTRY App::MessageCallback(GLenum source, GLenum type, GLuint id, GLen
 		", severity = " << severity_str <<
 		", ID = '" << id << '\'' <<
 		", message = '" << message << '\'' << std::endl;
+}
+
+void App::glfw_windowPositionCallback(GLFWwindow* window, int xpos, int ypos)
+{
+	auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
+	if (!this_inst->fullscreen)
+	{
+		this_inst->window_pos_x = xpos;
+		this_inst->window_pos_y = ypos;
+	}
 }

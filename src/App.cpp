@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <numeric>
 #include <execution>
 
@@ -22,6 +23,7 @@
 
 #include "App.hpp"
 #include "ObjectLoader.hpp"
+#include "AudioManager.hpp"
 
 App::App()
 {
@@ -53,11 +55,11 @@ void App::init_glfw()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     
-    glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_SAMPLES, aa_sample_count);
 
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
-    window = glfwCreateWindow(800, 600, "OpenGL context", NULL, NULL);
+    window = glfwCreateWindow(window_width, window_height, "OpenGL context", NULL, NULL);
     if (window == nullptr) {
         throw std::runtime_error("Window creation failed!");
     }
@@ -73,6 +75,9 @@ void App::init_glfw()
     glfwSetKeyCallback(window, glfw_key_callback);
     glfwSetScrollCallback(window, glfw_scroll_callback);
     glfwSetCursorPosCallback(window, glfw_cursorPositionCallback);
+    glfwSetWindowPosCallback(window, glfw_windowPositionCallback);
+
+    glfwGetWindowPos(window, &window_pos_x, &window_pos_y);
 }
 
 void App::init_glew()
@@ -252,6 +257,30 @@ void App::init_imgui()
     std::cout << "ImGUI version: " << ImGui::GetVersion() << "\n";
 }
 
+void App::load_music()
+{
+    std::vector<std::pair<std::string, std::string>> name_filename_pairs = {
+        {"Doom", "../resources/music/03_E1M1_At_Doom_s_Gate.mp3"},
+        {"ouch", "../resources/sfx/ouch.wav"},
+        {"step1", "../resources/sfx/step1.wav"},
+        {"step2", "../resources/sfx/step2.wav"}
+    };
+
+    bool success = true;
+    for (auto name_filename : name_filename_pairs)
+    {
+        if (!AudioManager::getInstance().load(name_filename.first, name_filename.second))
+        {
+            success = false;
+        }
+    }
+    
+    if (!success)
+    {
+        throw std::runtime_error("Failed to load one or multiple sound files");
+    }
+}
+
 bool App::init()
 {
     try {
@@ -267,6 +296,40 @@ bool App::init()
             std::filesystem::create_directory("../screenshots");
         }
 
+        std::ifstream sett_file("../settings.json");
+        nlohmann::json settings = nlohmann::json::parse(sett_file);
+
+        if (settings["window_size"]["width"].is_number_integer()) {          
+            window_width = settings["window_size"]["width"].template get<int>();
+            if (window_width < 10)
+            {
+                window_width = 10;
+            }
+        }
+        else {
+            window_width = 800;
+        }
+        if (settings["window_size"]["height"].is_number_integer()) {
+            window_height = settings["window_size"]["height"].template get<int>();
+            if (window_height < 10)
+            {
+                window_height = 10;
+            }
+        }
+        else {
+            window_height = 600;
+        }
+        if (settings["aa_sample_count"].is_number_integer()) {
+            aa_sample_count = settings["aa_sample_count"].template get<int>();
+            if (aa_sample_count != 4 && aa_sample_count != 2 && aa_sample_count != 1 && aa_sample_count != 8)
+            {
+                aa_sample_count = 4;
+            }
+        }
+        else {
+            aa_sample_count = 4;
+        }
+
         init_opencv();
 
         init_glfw();
@@ -279,9 +342,16 @@ bool App::init()
         print_glfw_info();
         print_glm_info();
 
+        if (!AudioManager::getInstance().initMicrophone())
+        {
+            throw std::runtime_error("Microphone init failed");
+        }
+
         glfwSwapInterval(is_vsync_on ? 1 : 0); // vsync
 
         init_assets();
+
+        load_music();
 
         init_imgui();
 
@@ -347,6 +417,8 @@ int App::run(void)
     //set initial camera position
     //camera.Position = glm::vec3(0, 0, 10);
 
+    AudioManager::getInstance().playBGM("Doom");
+
     while (!glfwWindowShouldClose(window))
     {
         // Find face
@@ -400,13 +472,14 @@ int App::run(void)
             ImGui::NewFrame();
             //ImGui::ShowDemoWindow(); // Enable mouse when using Demo!
             ImGui::SetNextWindowPos(ImVec2(10, 10));
-            ImGui::SetNextWindowSize(ImVec2(250, 100));
+            ImGui::SetNextWindowSize(ImVec2(250, 120));
 
             ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
             ImGui::Text("V-Sync: %s", is_vsync_on ? "ON" : "OFF");
             ImGui::Text("FPS: %.1f", gl_fps);
+            ImGui::Text("Microphone RMS: %.3f", AudioManager::getInstance().getMicLoudness());
             ImGui::Text("(press RMB to release mouse)");
-            ImGui::Text("(hit D to show/hide info)");
+            ImGui::Text("(hit D to show/hide GUI)");
             ImGui::End();
         }
 
@@ -653,4 +726,52 @@ void App::update_projection_matrix(void)
     float ratio = static_cast<float>(viewport_width) / viewport_height;
     glViewport(0, 0, viewport_width, viewport_height);
     projection_matrix = glm::perspective(glm::radians(FOV_degrees), ratio, NEAR_CLIP_PLANE, FAR_CLIP_PLANE);
+}
+
+int App::min_int(int x, int y)
+{
+    return x < y ? x : y;
+}
+
+int App::max_int(int x, int y)
+{
+    return x > y ? x : y;
+}
+
+//https://stackoverflow.com/a/31526753
+GLFWmonitor* App::get_current_monitor(GLFWwindow* window)
+{
+
+	int monitor_count;
+	int wx, wy, ww, wh;
+	int mx, my, mw, mh;
+	int overlap, best_overlap = 0;
+	GLFWmonitor* best_monitor = NULL;
+	GLFWmonitor** monitors;
+	const GLFWvidmode* mode;
+
+	glfwGetWindowPos(window, &wx, &wy);
+	glfwGetWindowSize(window, &ww, &wh);
+	monitors = glfwGetMonitors(&monitor_count);
+
+	for (int i = 0; i < monitor_count; ++i)
+	{
+		mode = glfwGetVideoMode(monitors[i]);
+		glfwGetMonitorPos(monitors[i], &mx, &my);
+		mw = mode->width;
+		mh = mode->height;
+
+		overlap =
+			max_int(0, min_int(wx + ww, mx + mw) - max_int(wx, mx)) *
+			max_int(0, min_int(wy + wh, my + mh) - max_int(wy, my));
+
+		if (best_overlap < overlap)
+		{
+			best_overlap = overlap;
+			best_monitor = monitors[i];
+		}
+	}
+
+	return best_monitor;
+
 }

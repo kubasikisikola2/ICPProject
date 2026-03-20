@@ -4,13 +4,13 @@
     "glew",
     "glfw3",
     "glm",
-    "nlohmann-json",
     {
       "name": "imgui",
       "features": [
         "glfw-binding",
         "opengl3-binding"
       ]
-    }
+    },
+    "nlohmann-json"
   ]
 }
