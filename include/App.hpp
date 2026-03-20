@@ -39,6 +39,7 @@ private:
     void init_opencv();
     void init_assets();
     void init_imgui();
+    void load_music();
 
     void check_gl_version();
 
@@ -50,6 +51,7 @@ private:
     double cursorLastY{ 0 };
 
     //callbacks
+    static void glfw_windowPositionCallback(GLFWwindow* window, int xpos, int ypos);
     static void glfw_cursorPositionCallback(GLFWwindow* window, double xpos, double ypos);
     static void glfw_error_callback(int error, const char* description);
     static void glfw_framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -58,14 +60,19 @@ private:
     static void glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
     static void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
 
-    void hsv2rgb(float h, float s, float v, float& r, float& g, float& b);
+    static void hsv2rgb(float h, float s, float v, float& r, float& g, float& b);
     void update_projection_matrix(void);
+
+    static int min_int(int x, int y);
+    static int max_int(int x, int y);
+    static GLFWmonitor* get_current_monitor(GLFWwindow* window);
 
     GLFWwindow* window = nullptr;
     bool is_vsync_on{ true };
     bool show_imgui{ true };
     float game_speed{ 1.0 };
-    bool game_paused{ false };
+    bool paused_by_key{ false };
+    bool muted{ false };
 
     GLuint shader_prog_ID{ 0 };
     GLuint VBO_ID{ 0 };
@@ -87,6 +94,7 @@ private:
     std::atomic<bool> tracker_buffer_empty;
     std::vector<cv::Point2f> tracker_result;
     std::mutex points_result_mutex;
+    std::thread tracker_thread;
 
     //this is just for image display in the main thread
     //pos deque to make the crosshair synchronized with the image
@@ -109,5 +117,10 @@ private:
     float FOV_degrees = 60.0f;
     glm::mat4 projection_matrix = glm::identity<glm::mat4>();
     Camera camera;
+
+    cv::Mat screenshot;
+
+    int window_pos_x, window_pos_y, window_width, window_height, aa_sample_count;
+    bool fullscreen = false;
 };
 

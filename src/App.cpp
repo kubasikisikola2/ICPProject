@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <numeric>
 #include <execution>
 
@@ -23,6 +24,7 @@
 #include "App.hpp"
 #include "ObjectLoader.hpp"
 #include "MeshGen.cpp"
+#include "AudioManager.hpp"
 
 App::App()
 {
@@ -53,10 +55,12 @@ void App::init_glfw()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    
+    glfwWindowHint(GLFW_SAMPLES, aa_sample_count);
 
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
-    window = glfwCreateWindow(800, 600, "OpenGL context", NULL, NULL);
+    window = glfwCreateWindow(window_width, window_height, "OpenGL context", NULL, NULL);
     if (window == nullptr) {
         throw std::runtime_error("Window creation failed!");
     }
@@ -72,6 +76,9 @@ void App::init_glfw()
     glfwSetKeyCallback(window, glfw_key_callback);
     glfwSetScrollCallback(window, glfw_scroll_callback);
     glfwSetCursorPosCallback(window, glfw_cursorPositionCallback);
+    glfwSetWindowPosCallback(window, glfw_windowPositionCallback);
+
+    glfwGetWindowPos(window, &window_pos_x, &window_pos_y);
 }
 
 void App::init_glew()
@@ -106,6 +113,15 @@ void App::init_glew()
     }
     else
         std::cout << "GL_DEBUG NOT SUPPORTED!" << std::endl;
+
+    if (GLEW_ARB_multisample)
+    {
+        std::cout << "GL antialiasing is supported." << std::endl;
+    }
+    else
+    {
+        std::cout << "GL antialiasing is NOT supported." << std::endl;
+    }
 
     glEnable(GL_DEPTH_TEST);
 }
@@ -312,6 +328,30 @@ void App::init_imgui()
     std::cout << "ImGUI version: " << ImGui::GetVersion() << "\n";
 }
 
+void App::load_music()
+{
+    std::vector<std::pair<std::string, std::string>> name_filename_pairs = {
+        {"Doom", "../resources/music/03_E1M1_At_Doom_s_Gate.mp3"},
+        {"ouch", "../resources/sfx/ouch.wav"},
+        {"step1", "../resources/sfx/step1.wav"},
+        {"step2", "../resources/sfx/step2.wav"}
+    };
+
+    bool success = true;
+    for (auto name_filename : name_filename_pairs)
+    {
+        if (!AudioManager::getInstance().load(name_filename.first, name_filename.second))
+        {
+            success = false;
+        }
+    }
+    
+    if (!success)
+    {
+        throw std::runtime_error("Failed to load one or multiple sound files");
+    }
+}
+
 bool App::init()
 {
     try {
@@ -320,6 +360,45 @@ bool App::init()
         if (!std::filesystem::exists("../resources"))
         {
             throw std::runtime_error("Directory 'resources' not found. Various media files are expected to be there.");
+        }
+
+        if (!std::filesystem::exists("../screenshots"))
+        {
+            std::filesystem::create_directory("../screenshots");
+        }
+
+        std::ifstream sett_file("../settings.json");
+        nlohmann::json settings = nlohmann::json::parse(sett_file);
+
+        if (settings["window_size"]["width"].is_number_integer()) {          
+            window_width = settings["window_size"]["width"].template get<int>();
+            if (window_width < 10)
+            {
+                window_width = 10;
+            }
+        }
+        else {
+            window_width = 800;
+        }
+        if (settings["window_size"]["height"].is_number_integer()) {
+            window_height = settings["window_size"]["height"].template get<int>();
+            if (window_height < 10)
+            {
+                window_height = 10;
+            }
+        }
+        else {
+            window_height = 600;
+        }
+        if (settings["aa_sample_count"].is_number_integer()) {
+            aa_sample_count = settings["aa_sample_count"].template get<int>();
+            if (aa_sample_count != 4 && aa_sample_count != 2 && aa_sample_count != 1 && aa_sample_count != 8)
+            {
+                aa_sample_count = 4;
+            }
+        }
+        else {
+            aa_sample_count = 4;
         }
 
         init_opencv();
@@ -334,9 +413,16 @@ bool App::init()
         print_glfw_info();
         print_glm_info();
 
+        if (!AudioManager::getInstance().initMicrophone())
+        {
+            throw std::runtime_error("Microphone init failed");
+        }
+
         glfwSwapInterval(is_vsync_on ? 1 : 0); // vsync
 
         init_assets();
+
+        load_music();
 
         init_imgui();
 
@@ -365,9 +451,10 @@ int App::run(void)
     FpsMeter gl_fps_meter(std::chrono::milliseconds(FPS_METER_INTERVAL));
     double gl_fps{ 0.0 }; //unintentional surprised face LOL!
 
-    cv::Mat frame;
-    cv::Point2f center;
     std::string fps_string;
+
+    cv::Mat face_frame;
+    std::vector<cv::Point2f> face_pos;
 
     int baseline = 0;
     cv::Size fps_text_size = cv::getTextSize(fps_string, cv::FONT_HERSHEY_SIMPLEX, FPS_TEXT_FONT_SCALE, FPS_TEXT_LINE_WIDTH, &baseline);
@@ -375,16 +462,18 @@ int App::run(void)
     cv::Scalar fps_text_color(0, 255, 0);
     cv::Mat show_frame;
 
-    /*std::thread tracker_thread(tracker_thread_func,
+    tracker_thread = std::thread(tracker_thread_func,
                                std::ref(capture), 
                                std::ref(tracker_terminate),
                                std::ref(tracker_buffer_empty),
                                std::ref(tracker_frame_deque),
-                               std::ref(tracker_pos_deque));*/
+                               std::ref(tracker_pos_deque));
 
     double now = glfwGetTime();
     double begin_time = now;
     double last_time = now; // so that delta time is 0 at the beginning
+
+    bool paused_by_tracker = false;
 
     glClearColor(0, 0, 0, 0);
 
@@ -394,12 +483,59 @@ int App::run(void)
     glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
     glViewport(0, 0, viewport_width, viewport_height);
     update_projection_matrix();
+    screenshot.create(viewport_height, viewport_width, CV_8UC3);
 
     //set initial camera position
     //camera.Position = glm::vec3(0, 0, 10);
 
+    AudioManager::getInstance().playBGM("Doom");
+
     while (!glfwWindowShouldClose(window))
     {
+        // Find face
+        if (tracker_buffer_empty) {
+            std::cout << "Couldn't get new frame";
+            break;
+        }
+
+        if (!tracker_frame_deque.empty() && !tracker_pos_deque.empty())
+        {
+            face_frame = tracker_frame_deque.pop_front();
+            face_pos = tracker_pos_deque.pop_front();
+            if (face_pos.size() > 0) {
+                draw_cross_normalized(face_frame, face_pos[0], 15);
+            }
+
+            // show frame only when one person is watching
+            if (face_pos.size() == 1) {
+                show_frame = face_frame;
+                paused_by_tracker = false;
+            }
+            else if (face_pos.size() == 0) {
+                cv::resize(image_no_face, show_frame, cv::Size(face_frame.cols, face_frame.rows));
+                paused_by_tracker = true;
+            }
+            else if (face_pos.size() > 1) {
+                cv::resize(image_intruder, show_frame, cv::Size(face_frame.cols, face_frame.rows));
+                paused_by_tracker = true;
+            }
+
+            fps_meter.update();
+
+            if (fps_meter.is_updated()) {
+                double fps = fps_meter.get_fps();
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << fps;
+                fps_string = "FPS: " + ss.str();
+                //std::cout << fps_string << std::endl;
+            }
+
+            cv::putText(show_frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
+            cv::imshow(WINDOW_TITLE, show_frame);
+        }
+
+        bool game_paused = paused_by_key || paused_by_tracker;
+
         // ImGui prepare render (only if required)
         if (show_imgui) {
             ImGui_ImplOpenGL3_NewFrame();
@@ -407,13 +543,14 @@ int App::run(void)
             ImGui::NewFrame();
             //ImGui::ShowDemoWindow(); // Enable mouse when using Demo!
             ImGui::SetNextWindowPos(ImVec2(10, 10));
-            ImGui::SetNextWindowSize(ImVec2(250, 100));
+            ImGui::SetNextWindowSize(ImVec2(250, 120));
 
             ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
             ImGui::Text("V-Sync: %s", is_vsync_on ? "ON" : "OFF");
             ImGui::Text("FPS: %.1f", gl_fps);
+            ImGui::Text("Microphone RMS: %.3f", AudioManager::getInstance().getMicLoudness());
             ImGui::Text("(press RMB to release mouse)");
-            ImGui::Text("(hit D to show/hide info)");
+            ImGui::Text("(hit D to show/hide GUI)");
             ImGui::End();
         }
 
@@ -429,55 +566,6 @@ int App::run(void)
         {
             //scene.at("bunny").rotate(glm::vec3(0.0f, 180.0f * time_step, 0.0f));
         }
-
-        // TODO reimplement face detection to not block main thread
-        /*
-        if (tracker_buffer_empty) {
-            std::cout << "Couldn't get new frame";
-            break;
-        }
-         
-       
-        tracker_frame_deque.wait();
-        cv::Mat frame = tracker_frame_deque.pop_front();
-
-        tracker_pos_deque.wait();
-        std::vector<cv::Point2f> face_pos = tracker_pos_deque.pop_front();
-        
-        if (face_pos.size() > 0) {
-            draw_cross_normalized(frame, face_pos[0], 15);
-        }
-        // show frame only when one person is watching
-        if (face_pos.size() == 1) {
-            show_frame = frame;
-        }
-        else if (face_pos.size() == 0) {
-            cv::resize(image_no_face, show_frame, cv::Size(frame.cols, frame.rows));
-        }
-        else if (face_pos.size() > 1) {
-            cv::resize(image_intruder, show_frame, cv::Size(frame.cols, frame.rows));
-        }
-        
-        fps_meter.update();
-
-        if (fps_meter.is_updated()) {
-            double fps = fps_meter.get_fps();
-            std::stringstream ss;
-            ss << std::fixed << std::setprecision(2) << fps;
-            fps_string = "FPS: " + ss.str();
-            std::cout << fps_string << std::endl;
-        }
-        
-
-        cv::putText(frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
-        cv::imshow(WINDOW_TITLE, show_frame);
-        int key = cv::waitKey(1);
-        if (key == 27 || glfwWindowShouldClose(window)) {
-            tracker_terminate = true;
-            tracker_thread.join();
-            break;
-        }
-        */
 
         // clear canvas
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -499,6 +587,19 @@ int App::run(void)
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         }
 
+        if (glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS)
+        {
+            glReadPixels(0, 0, screenshot.cols, screenshot.rows, GL_BGR, GL_UNSIGNED_BYTE, screenshot.data);
+            cv::flip(screenshot, screenshot, 0);
+            auto screenshot_now = std::chrono::system_clock::now();
+            auto screenshot_time_t = std::chrono::system_clock::to_time_t(screenshot_now);
+            std::stringstream filename;
+            filename << "../screenshots/" + std::string(SCREENSHOT_FILE_NAME) + '_';
+            filename << std::put_time(std::localtime(&screenshot_time_t), SCREENSHOT_TIMESTAMP_FORMAT);
+            filename << ".jpg";
+            cv::imwrite(filename.str().c_str(), screenshot);
+        }
+
         glfwSwapBuffers(window);
 
         now = glfwGetTime();
@@ -511,7 +612,8 @@ int App::run(void)
             gl_fps = gl_fps_meter.get_fps();
             std::stringstream ss;
             ss << std::fixed << std::setprecision(2) << gl_fps;
-            std::string title_string = "ICP Project [FPS: " + ss.str() + ", VSync: " + (is_vsync_on ? "ON" : "OFF") + "]";
+            std::string title_string = std::string(WINDOW_TITLE) + " [" + (game_paused ? "Paused, " : "") + 
+                "FPS: " + ss.str() + ", VSync: " + (is_vsync_on ? "ON" : "OFF") + "]";
             glfwSetWindowTitle(window, title_string.c_str());
         }
 
@@ -523,6 +625,12 @@ int App::run(void)
 
 void App::destroy(void)
 {
+    // Terminate tracker
+    if (tracker_thread.joinable())
+    {
+        tracker_terminate = true;
+        tracker_thread.join();
+    }
     // clean up ImGUI
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -684,4 +792,52 @@ void App::update_projection_matrix(void)
     float ratio = static_cast<float>(viewport_width) / viewport_height;
     glViewport(0, 0, viewport_width, viewport_height);
     projection_matrix = glm::perspective(glm::radians(FOV_degrees), ratio, NEAR_CLIP_PLANE, FAR_CLIP_PLANE);
+}
+
+int App::min_int(int x, int y)
+{
+    return x < y ? x : y;
+}
+
+int App::max_int(int x, int y)
+{
+    return x > y ? x : y;
+}
+
+//https://stackoverflow.com/a/31526753
+GLFWmonitor* App::get_current_monitor(GLFWwindow* window)
+{
+
+	int monitor_count;
+	int wx, wy, ww, wh;
+	int mx, my, mw, mh;
+	int overlap, best_overlap = 0;
+	GLFWmonitor* best_monitor = NULL;
+	GLFWmonitor** monitors;
+	const GLFWvidmode* mode;
+
+	glfwGetWindowPos(window, &wx, &wy);
+	glfwGetWindowSize(window, &ww, &wh);
+	monitors = glfwGetMonitors(&monitor_count);
+
+	for (int i = 0; i < monitor_count; ++i)
+	{
+		mode = glfwGetVideoMode(monitors[i]);
+		glfwGetMonitorPos(monitors[i], &mx, &my);
+		mw = mode->width;
+		mh = mode->height;
+
+		overlap =
+			max_int(0, min_int(wx + ww, mx + mw) - max_int(wx, mx)) *
+			max_int(0, min_int(wy + wh, my + mh) - max_int(wy, my));
+
+		if (best_overlap < overlap)
+		{
+			best_overlap = overlap;
+			best_monitor = monitors[i];
+		}
+	}
+
+	return best_monitor;
+
 }

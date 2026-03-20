@@ -20,3 +20,14 @@
 //file path defines 
 #define TEXTURE_SHADER_PATH_VERT "../resources/shaders/tex.vert"
 #define TEXTURE_SHADER_PATH_FRAG "../resources/shaders/tex.frag"
+//screenshot config
+#define SCREENSHOT_FILE_NAME "Screenshot"
+#define SCREENSHOT_TIMESTAMP_FORMAT "%F_%H-%M-%S"
+
+//audio config
+#define AUDIO_MIN_DISTANCE 0.5f
+#define AUDIO_MAX_DISTANCE 100.0f
+#define AUDIO_DEF_VOLUME 2.0f
+
+//mic config
+#define MIC_BUFFER_FRAMES 2048
