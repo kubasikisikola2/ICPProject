@@ -19,9 +19,12 @@ void App::glfw_cursorPositionCallback(GLFWwindow* window, double xpos, double yp
 		return;  
 	}
 
-	app->camera.ProcessMouseMovement(xpos - app->cursorLastX, (ypos - app->cursorLastY) * -1.0);
-	app->cursorLastX = xpos;
-	app->cursorLastY = ypos;
+	if (!app->game_paused) {
+		app->camera.ProcessMouseMovement(xpos - app->cursorLastX, (ypos - app->cursorLastY) * -1.0);
+		app->cursorLastX = xpos;
+		app->cursorLastY = ypos;
+	}
+
 }
 
 void App::glfw_error_callback(int error, const char* description)
@@ -62,6 +65,12 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 				this_inst->muted = true;
 			}
 			break;
+		case GLFW_KEY_K:
+			if (this_inst->player.get_mode() == PlayerMode::FreeFly)
+				this_inst->player.set_mode(PlayerMode::FirstPerson);
+			else
+				this_inst->player.set_mode(PlayerMode::FreeFly);
+			break;
 		case GLFW_KEY_F11:
 			if (this_inst->fullscreen)
 			{
@@ -85,11 +94,10 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 }
 
 void App::glfw_scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-	auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
-	this_inst->FOV_degrees += 10 * yoffset; // yoffset is mostly +1 or -1; one degree difference in fov is not visible
-	this_inst->FOV_degrees = std::clamp(this_inst->FOV_degrees, 20.0f, 170.0f); // limit FOV to reasonable values...
-
-	this_inst->update_projection_matrix();
+	//auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
+	//this_inst->FOV_degrees += 10 * yoffset; // yoffset is mostly +1 or -1; one degree difference in fov is not visible
+	//this_inst->FOV_degrees = std::clamp(this_inst->FOV_degrees, 20.0f, 170.0f); // limit FOV to reasonable values...
+	//this_inst->update_projection_matrix();
 }
 
 void App::glfw_framebuffer_size_callback(GLFWwindow* window, int width, int height) {
@@ -112,6 +120,7 @@ void App::glfw_framebuffer_size_callback(GLFWwindow* window, int width, int heig
 }
 
 void App::glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+	auto this_inst = static_cast<App*>(glfwGetWindowUserPointer(window));
 	if (action == GLFW_PRESS) {
 		switch (button) {
 		case GLFW_MOUSE_BUTTON_LEFT: {
@@ -122,8 +131,12 @@ void App::glfw_mouse_button_callback(GLFWwindow* window, int button, int action,
 			}
 			else {
 				// we are already inside our game: shoot, click, etc.
-				std::cout << "Bang!\n";
-				AudioManager::getInstance().play2D("ouch");
+				if (!this_inst->game_paused) {
+					if (!this_inst->gun.is_shooting()) {
+						this_inst->gun.shoot();
+						this_inst->shoot();
+					}
+				}
 			}
 			break;
 		}

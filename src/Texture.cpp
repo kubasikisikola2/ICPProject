@@ -138,8 +138,11 @@ void Texture::replace_image(const cv::Mat& image) {
     // immutable texture format used: only content can be changed (size and data format MUST match)
 
     // check size
-    if ((image.rows != get_height()) || (image.cols != get_width()))
+    if ((image.rows != get_height()) || (image.cols != get_width())) {
+        std::cout << "rows: " << image.rows << " Cols: " << image.cols << std::endl;
+        std::cout << "rows expected: " << get_height() << " cols expected: " << get_width() << std::endl;
         throw std::runtime_error("improper image replacement size");
+    }
 
     // check channels and format
     int tex_format = 0;
