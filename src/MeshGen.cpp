@@ -54,14 +54,37 @@ std::shared_ptr<Mesh> generate_cube_mesh() {
 }
 
 
-std::shared_ptr<Mesh> generate_floor_mesh(float size, float uvScale){
-    float h = size * 0.5f;
-
+std::shared_ptr<Mesh> generate_quad_mesh(
+    const glm::vec3& p0,
+    const glm::vec3& p1,
+    const glm::vec3& p2,
+    const glm::vec3& p3,
+    const glm::vec3& normal,
+    float uvScaleX,
+    float uvScaleY)
+{
     std::vector<Vertex> vertices = {
-        {{-h, 0.0f, -h}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-        {{ h, 0.0f, -h}, {0.0f, 1.0f, 0.0f}, {uvScale, 0.0f}},
-        {{ h, 0.0f,  h}, {0.0f, 1.0f, 0.0f}, {uvScale, uvScale}},
-        {{-h, 0.0f,  h}, {0.0f, 1.0f, 0.0f}, {0.0f, uvScale}}
+        {p0, normal, {0.0f, 0.0f}},
+        {p1, normal, {uvScaleX, 0.0f}},
+        {p2, normal, {uvScaleX, uvScaleY}},
+        {p3, normal, {0.0f, uvScaleY}}
+    };
+
+    std::vector<GLuint> indices = {
+        0, 1, 2,
+        2, 3, 0
+    };
+
+    return std::make_shared<Mesh>(vertices, indices, GL_TRIANGLES);
+}
+
+std::shared_ptr<Mesh> generate_webcam_mesh()
+{
+    std::vector<Vertex> vertices = {
+        {{0.0f, 0.0f, 0.0f}, {0,0,1}, {0.0f, 0.0f}},
+        {{1.0f, 0.0f, 0.0f}, {0,0,1}, {1.0f, 0.0f}},
+        {{1.0f, 1.0f, 0.0f}, {0,0,1}, {1.0f, 1.0f}},
+        {{0.0f, 1.0f, 0.0f}, {0,0,1}, {0.0f, 1.0f}}
     };
 
     std::vector<GLuint> indices = {

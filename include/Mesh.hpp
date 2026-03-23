@@ -12,10 +12,6 @@
 #include <memory>  
 #include <iostream>
 
-
-
-
-
 class Mesh : private NonCopyable
 {
 public:

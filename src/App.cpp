@@ -124,86 +124,8 @@ void App::init_glew()
     }
 
     glEnable(GL_DEPTH_TEST);
-}
-
-void App::check_gl_version()
-{
-    GLint gl_version_major, gl_version_minor;
-    glGetIntegerv(GL_MAJOR_VERSION, &gl_version_major);
-    glGetIntegerv(GL_MINOR_VERSION, &gl_version_minor);
-
-    if (gl_version_major != 4 || gl_version_minor != 6)
-    {
-        throw std::runtime_error("We're not using requested OpenGL version!");
-    }
-}
-
-void App::print_opencv_info()
-{
-    std::cout << "Capture capabilities:"
-        << " width = " << capture.get(cv::CAP_PROP_FRAME_WIDTH)
-        << ", height = " << capture.get(cv::CAP_PROP_FRAME_HEIGHT)
-        << '\n';
-}
-
-void App::print_glfw_info()
-{
-    std::cout << "GLFW version: " << glfwGetVersionString() << '\n';
-}
-
-void App::print_glm_info()
-{
-    std::cout << "GLM version: " << GLM_VERSION_MAJOR << '.' << GLM_VERSION_MINOR << '.'
-        << GLM_VERSION_PATCH << "rev" << GLM_VERSION_REVISION << '\n';
-}
-
-void App::print_gl_info()
-{
-    const char* vendor = (const char*)glGetString(GL_VENDOR);
-    std::cout << "GPU vendor is: " << (vendor == nullptr ? "Unknown" : vendor) << '\n';
-
-    const char* renderer = (const char*)glGetString(GL_RENDERER);
-    std::cout << "GL renderer is: " << (renderer == nullptr ? "Unknown" : renderer) << '\n';
-
-    const char* gl_version = (const char*)glGetString(GL_VERSION);
-    std::cout << "GL version is: " << (gl_version == nullptr ? "Unknown" : gl_version) << '\n';
-
-    const char* glsl_version = (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
-    std::cout << "GLSL version is: " << (glsl_version == nullptr ? "Unknown" : glsl_version) << '\n';
-
-    GLint gl_context_profile_mask;
-    glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &gl_context_profile_mask);
-
-    if (gl_context_profile_mask & GL_CONTEXT_CORE_PROFILE_BIT) {
-        std::cout << "We are using CORE profile\n";
-    }
-    else {
-        if (gl_context_profile_mask & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT) {
-            std::cout << "We are using COMPATIBILITY profile\n";
-            throw std::runtime_error("We're not using CORE profile!");
-        }
-        else {
-            throw std::runtime_error("What??");
-        }
-    }
-
-    GLint gl_context_flags;
-    glGetIntegerv(GL_CONTEXT_FLAGS, &gl_context_flags);
-
-    if (gl_context_flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT) {
-        std::cout << "This GL context is forward compatible\n";
-    }
-    if (gl_context_flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
-        std::cout << "This GL context is a debug context\n";
-    }
-    if (gl_context_flags & GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT)
-    {
-        std::cout << "This GL context supports robust memory access\n";
-    }
-    if (gl_context_flags & GL_CONTEXT_FLAG_NO_ERROR_BIT)
-    {
-        std::cout << "This GL context doesn't report errors\n";
-    }
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 void App::init_assets(void) {
@@ -223,11 +145,7 @@ void App::init_assets(void) {
     shader_library.emplace("text_shader", std::make_shared<ShaderProgram>(std::filesystem::path(TEXTURE_SHADER_PATH_VERT), std::filesystem::path(TEXTURE_SHADER_PATH_FRAG)));
     texture_library.emplace("wood_box_text", std::make_shared<Texture>("../resources/textures/box_rgb888.png"));
     mesh_library.emplace("wood_box_mesh", mesh_wooden_box);
-    Model modelCube;
-    modelCube.addMesh(mesh_library.at("wood_box_mesh"), shader_library.at("text_shader"), texture_library.at("wood_box_text"));
-    scene.emplace("cube", modelCube);
-   
-
+    add_box_line(BOXES_COUNT, BOXES_START_X, BOXES_SPACING, BOXES_Y_POSITION, BOXES_Z_POSITION);
 
     std::vector<Vertex> vGun;
     std::vector<GLuint> iGun;
@@ -243,16 +161,36 @@ void App::init_assets(void) {
 
     Model gunModel;
     gunModel.addMesh(mesh_library.at("mesh_gun"), shader_library.at("text_shader"), texture_library.at("gun_text"));
-    scene.emplace("gun", gunModel);
+    scene.emplace("gun", std::make_shared<Model>(gunModel));
+
+    init_room_assets();
+
+    Model webcamModel;
+    texture_library.emplace("webcam_text", std::make_shared<Texture>("../resources/textures/placeholder.jpg"));
+    mesh_library.emplace("webcam_mesh", generate_webcam_mesh());
+    webcamModel.addMesh(mesh_library.at("webcam_mesh"), shader_library.at("text_shader"), texture_library.at("webcam_text"));
+    scene.emplace("webcam", std::make_shared<Model>(webcamModel));
 
 
-    mesh_library.emplace("floor_mesh", generate_floor_mesh(20.0f, 20.0f));
-    texture_library.emplace("floor_text", std::make_shared<Texture>("../resources/textures/floor.png"));
-    Model floor_model;
-    //floor_model.setPosition(glm::vec3(0.0f, -1.0f, 0.0f));
-    floor_model.addMesh(mesh_library.at("floor_mesh"), shader_library.at("text_shader"), texture_library.at("floor_text"));
-    scene.emplace("floor", floor_model);
+    mesh_library.emplace("muzzle_flash_mesh", generate_webcam_mesh());
+    texture_library.emplace("muzzle_flash_text", std::make_shared<Texture>("../resources/textures/muzzle_flash.png"));
+    muzzle_flash_model = std::make_shared<Model>();
+    muzzle_flash_model->addMesh(mesh_library.at("muzzle_flash_mesh"), shader_library.at("text_shader"), texture_library.at("muzzle_flash_text")
+    );
 
+    std::vector<Vertex> v_target;
+    std::vector<GLuint> i_target;
+    filename = "../resources/models/target.obj";
+    if (!loadOBJ(filename, v_target, i_target)) {
+        throw std::runtime_error("Loading failed: " + filename.string());
+
+    }
+    auto mesh_target = std::make_shared<Mesh>(v_target, i_target, GL_TRIANGLES);
+
+    texture_library.emplace("target_text", std::make_shared<Texture>("../resources/textures/target.jpeg"));
+    mesh_library.emplace("target_mesh", mesh_target);
+   
+    target_manager.init(N_TARGETS, mesh_library.at("target_mesh"), shader_library.at("text_shader"), texture_library.at("target_text"));
 
     std::cout << "succesfully initialized assets" << std::endl;
 }
@@ -371,9 +309,6 @@ bool App::init()
         throw;
     }
 
-    image_intruder = cv::imread("../resources/intruder.jpg");;
-    image_no_face = cv::imread("../resources/no_face.jpg");
-
     std::cout << "Initialized...\n";
 
     return true;
@@ -381,23 +316,15 @@ bool App::init()
 
 int App::run(void)
 {
-    GLfloat r, g, b, a;
-    r = g = b = a = 1.0f; //white color
-
-    glm::vec4 my_rgba(r, g, b, a);
 
     FpsMeter gl_fps_meter(std::chrono::milliseconds(FPS_METER_INTERVAL));
-    double gl_fps{ 0.0 }; //unintentional surprised face LOL!
+    FpsMeter tracker_fps_meter(std::chrono::milliseconds(FPS_METER_INTERVAL));
+    float tracker_fps = 0.0;
+    float gl_fps = 0.0;
 
-    std::string fps_string;
 
     cv::Mat face_frame;
     std::vector<cv::Point2f> face_pos;
-
-    int baseline = 0;
-    cv::Size fps_text_size = cv::getTextSize(fps_string, cv::FONT_HERSHEY_SIMPLEX, FPS_TEXT_FONT_SCALE, FPS_TEXT_LINE_WIDTH, &baseline);
-    cv::Point fps_text_pos(10, fps_text_size.height + 10);
-    cv::Scalar fps_text_color(0, 255, 0);
     cv::Mat show_frame;
 
     tracker_thread = std::thread(tracker_thread_func,
@@ -415,127 +342,108 @@ int App::run(void)
 
     glClearColor(0, 0, 0, 0);
 
-    float triangle_animation_speed = 120.0;
-    float triangle_hue{};
-
     glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
     glViewport(0, 0, viewport_width, viewport_height);
     update_projection_matrix();
     screenshot.create(viewport_height, viewport_width, CV_8UC3);
 
-    //set initial camera position
-    //camera.Position = glm::vec3(0, 0, 10);
-
     AudioManager::getInstance().playBGM("Doom");
+
+    player.set_floor_height(-1.0f);
+    player.set_mode(PlayerMode::FirstPerson);
+    gun.set_model(scene.at("gun"));
+    gun.set_flash_model(muzzle_flash_model);
 
     while (!glfwWindowShouldClose(window))
     {
-        // Find face
-      /*  if (tracker_buffer_empty) {
-            std::cout << "Couldn't get new frame";
-            break;
-        }
-
+        // check if face is on webcam. if not --> pause
         if (!tracker_frame_deque.empty() && !tracker_pos_deque.empty())
         {
             face_frame = tracker_frame_deque.pop_front();
             face_pos = tracker_pos_deque.pop_front();
-            if (face_pos.size() > 0) {
-                draw_cross_normalized(face_frame, face_pos[0], 15);
-            }
-
-            // show frame only when one person is watching
             if (face_pos.size() == 1) {
-                show_frame = face_frame;
                 paused_by_tracker = false;
             }
-            else if (face_pos.size() == 0) {
-                cv::resize(image_no_face, show_frame, cv::Size(face_frame.cols, face_frame.rows));
-                paused_by_tracker = true;
-            }
-            else if (face_pos.size() > 1) {
-                cv::resize(image_intruder, show_frame, cv::Size(face_frame.cols, face_frame.rows));
+            else {
                 paused_by_tracker = true;
             }
 
-            fps_meter.update();
+            tracker_fps_meter.update();
 
-            if (fps_meter.is_updated()) {
-                double fps = fps_meter.get_fps();
-                std::stringstream ss;
-                ss << std::fixed << std::setprecision(2) << fps;
-                fps_string = "FPS: " + ss.str();
-                //std::cout << fps_string << std::endl;
+            if (tracker_fps_meter.is_updated()) {
+                tracker_fps = tracker_fps_meter.get_fps();
             }
 
-            cv::putText(show_frame, fps_string, fps_text_pos, FPS_TEXT_FONT, FPS_TEXT_FONT_SCALE, fps_text_color, FPS_TEXT_LINE_WIDTH);
-            cv::imshow(WINDOW_TITLE, show_frame);
-        }*/
+            texture_library.at("webcam_text")->replace_image(face_frame);
+        }
 
-        bool game_paused = paused_by_key || paused_by_tracker;
+        game_paused = paused_by_key || paused_by_tracker;
 
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        draw_crosshair();
+   
         // ImGui prepare render (only if required)
         if (show_imgui) {
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
             //ImGui::ShowDemoWindow(); // Enable mouse when using Demo!
             ImGui::SetNextWindowPos(ImVec2(10, 10));
-            ImGui::SetNextWindowSize(ImVec2(250, 120));
+            ImGui::SetNextWindowSize(ImVec2(250, 270)); 
 
             ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
-            ImGui::Text("V-Sync: %s", is_vsync_on ? "ON" : "OFF");
+            ImGui::Text("Total shots: %d", total_shots);
+            ImGui::Text("Accuracy: %.1f%%", accuracy);
             ImGui::Text("FPS: %.1f", gl_fps);
+            ImGui::Text("Tracker FPS: %.1f", tracker_fps);
             ImGui::Text("Microphone RMS: %.3f", AudioManager::getInstance().getMicLoudness());
-            ImGui::Text("(press RMB to release mouse)");
-            ImGui::Text("(hit D to show/hide GUI)");
+            ImGui::Text("V-Sync: %s", is_vsync_on ? "ON" : "OFF");
+            ImGui::Text("RMB - release mouse");
+            ImGui::Text("TAB - show/hide GUI");
+            ImGui::Text("P - pause");
+            ImGui::Text("F11 - toggle fullscreen");
+            ImGui::Text("M - toggle sound");
+            ImGui::Text("V - toggle V-Sync");
+            ImGui::Text("K - toggle camera");
+            ImGui::Text("ESC - close app");
             ImGui::End();
         }
 
         //GAME STATE UPDATES HERE
-        double delta_time = begin_time - last_time;
-        double time_step = game_paused ? 0 : game_speed * delta_time;
-
-        triangle_hue += triangle_animation_speed * time_step;
-        triangle_hue = std::fmod(triangle_hue, 360);
-        hsv2rgb(triangle_hue, 1, 1, r, g, b);
-
-        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
-        {
-            //scene.at("bunny").rotate(glm::vec3(0.0f, 180.0f * time_step, 0.0f));
-        }
+        double delta_time = game_paused ? 0: (begin_time - last_time);
 
         // clear canvas
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         
-        //set View matrix = set CAMERA
-        camera.ProcessInput(window, delta_time);
+        // update player and gun logic and set camera
+        player.update(window, delta_time, camera);
         update_projection_matrix();
         glm::mat4 view_matrix = camera.GetViewMatrix();
+        gun.update(delta_time, camera.Position, camera.Front, camera.Up, camera.Right);
 
         //draw all models from scene
         for (auto &model : scene) {
-            model.second.update(now);
-            model.second.draw(view_matrix, projection_matrix);
+            if (model.first == "webcam")
+                continue;
+            model.second->update(delta_time);
+            model.second->draw(view_matrix, projection_matrix);
         }
 
-        if (show_imgui) {
-            ImGui::Render();
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if (gun.is_muzzle_flash_active()){
+            muzzle_flash_model->draw(view_matrix, projection_matrix);
         }
+
+        
+        target_manager.draw_targets(view_matrix, projection_matrix, now);
+        draw_webcam();
+
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        
 
         if (glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS)
         {
-            glReadPixels(0, 0, screenshot.cols, screenshot.rows, GL_BGR, GL_UNSIGNED_BYTE, screenshot.data);
-            cv::flip(screenshot, screenshot, 0);
-            auto screenshot_now = std::chrono::system_clock::now();
-            auto screenshot_time_t = std::chrono::system_clock::to_time_t(screenshot_now);
-            std::stringstream filename;
-            filename << "../screenshots/" + std::string(SCREENSHOT_FILE_NAME) + '_';
-            filename << std::put_time(std::localtime(&screenshot_time_t), SCREENSHOT_TIMESTAMP_FORMAT);
-            filename << ".jpg";
-            cv::imwrite(filename.str().c_str(), screenshot);
+            take_screenshot();
         }
 
         glfwSwapBuffers(window);
@@ -559,6 +467,54 @@ int App::run(void)
         glfwPollEvents();
     }
     return EXIT_SUCCESS;
+}
+
+void App::shoot()
+{
+    glm::vec3 rayOrigin = camera.Position;
+    glm::vec3 rayDir = glm::normalize(camera.Front);
+    glm::vec3 taget_hit_position;
+    total_shots++;
+
+    if (target_manager.shot_fired(rayOrigin, rayDir, &taget_hit_position))
+    {
+        //play positional audio
+        if (!muted) {
+            AudioManager::getInstance().play2D("ouch");
+        }
+        total_hits++;
+    }
+    
+    accuracy = ((float) total_hits / total_shots) * 100;
+}
+
+void App::draw_webcam() {
+    auto webcam = scene.at("webcam");
+    glDisable(GL_DEPTH_TEST);
+
+    glm::mat4 hud_view = glm::mat4(1.0f);
+    glm::mat4 hud_proj = glm::ortho(
+        0.0f, static_cast<float>(viewport_width),
+        0.0f, static_cast<float>(viewport_height),
+        -1.0f, 1.0f
+    );
+
+    float webcamSize = static_cast<float>(computeWebcamSize());
+
+    glm::mat4 webcam_model =
+        glm::translate(glm::mat4(1.0f),
+            glm::vec3(
+                viewport_width - webcamSize,
+                viewport_height - webcamSize,
+                0.0f
+            )) *
+        glm::scale(glm::mat4(1.0f),
+            glm::vec3(webcamSize, webcamSize, 1.0f));
+
+    webcam->setModelMatrix(webcam_model);
+    webcam->draw(hud_view, hud_proj);
+
+    glEnable(GL_DEPTH_TEST);
 }
 
 void App::destroy(void)
@@ -595,130 +551,6 @@ App::~App()
 {
     destroy();
     std::cout << "Bye...\n";
-}
-
-void App::draw_cross(cv::Mat& img, int x, int y, int size)
-{
-    cv::Point p1(x - size / 2, y);
-    cv::Point p2(x + size / 2, y);
-    cv::Point p3(x, y - size / 2);
-    cv::Point p4(x, y + size / 2);
-
-    cv::line(img, p1, p2, CV_RGB(255, 0, 0), 3);
-    cv::line(img, p3, p4, CV_RGB(255, 0, 0), 3);
-}
-
-void App::draw_cross_normalized(cv::Mat& img, cv::Point2f center_normalized, int size)
-{
-    center_normalized.x = std::clamp(center_normalized.x, 0.0f, 1.0f);
-    center_normalized.y = std::clamp(center_normalized.y, 0.0f, 1.0f);
-    size = std::clamp(size, 1, std::min(img.cols, img.rows));
-
-    cv::Point2f center_absolute(center_normalized.x * img.cols, center_normalized.y * img.rows);
-
-    cv::Point2f p1(center_absolute.x - (float)size / 2, center_absolute.y);
-    cv::Point2f p2(center_absolute.x + (float)size / 2, center_absolute.y);
-    cv::Point2f p3(center_absolute.x, center_absolute.y - (float)size / 2);
-    cv::Point2f p4(center_absolute.x, center_absolute.y + (float)size / 2);
-
-    cv::line(img, p1, p2, CV_RGB(255, 0, 0), 3);
-    cv::line(img, p3, p4, CV_RGB(255, 0, 0), 3);
-}
-
-cv::Point2f App::find_object_luma(cv::Mat & frame)
-{
-    //Copy the frame
-    cv::Mat loc_frame;
-    frame.copyTo(loc_frame);
-
-    // convert to grayscale, create threshold, sum white pixels
-    // compute centroid of white pixels (average X,Y coordinate of all white pixels)
-    cv::Point2f center;
-    cv::Point2f center_normalized;
-    int tot = 0;
-
-    for (int y = 0; y < frame.rows; y++) //y
-    {
-        for (int x = 0; x < frame.cols; x++) //x
-        {
-            // load source pixel
-            cv::Vec3b pixel = frame.at<cv::Vec3b>(y, x);
-
-            // compute temp grayscale value (convert from colors to Y)
-            unsigned char Y = 0.299 * pixel[2] + 0.587 * pixel[1] + 0.114 * pixel[0];
-
-            // FIND THRESHOLD (value 0..255)
-            if (Y < 240) {
-                // set output pixel black
-                loc_frame.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 0, 0);
-            }
-            else {
-                // set output pixel white
-                loc_frame.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 255, 255);
-
-                ++tot;
-                center.x += (x - center.x) / tot;
-                center.y += (y - center.y) / tot;
-            }
-        }
-    }
-
-    center_normalized.x = center.x / frame.cols;
-    center_normalized.y = center.y / frame.rows;
-    return center_normalized;
-}
-
-cv::Point2f App::find_object_chroma(cv::Mat & frame)
-{
-    double h_low = 150.0;
-    double s_low = 125.0;
-    double v_low = 130.0;
-    double h_hi = 255.0;
-    double s_hi = 255.0;
-    double v_hi = 255.0;
-
-    cv::Mat scene_hsv, scene_threshold;
-
-    cv::cvtColor(frame, scene_hsv, cv::COLOR_BGR2HSV);
-
-    cv::Scalar lower_threshold = cv::Scalar(h_low, s_low, v_low);
-    cv::Scalar upper_threshold = cv::Scalar(h_hi, s_hi, v_hi);
-    cv::inRange(scene_hsv, lower_threshold, upper_threshold, scene_threshold);
-
-    // Perform a morphological operation
-	cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(10, 10));
-	//cv::morphologyEx(scene_threshold, scene_threshold, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 2);
-
-    // Find all non-zero (ie. white) pixels in thresholded image
-    std::vector<cv::Point> whitePixels;
-    cv::findNonZero(scene_threshold, whitePixels);
-
-    // Count white pixels
-    int whiteCnt = whitePixels.size();
-
-    // Count SUM of X_coords, Y_coords of white pixels
-    // You need at least C++17 for std::reduce()
-    //cv::Point2f whiteAccum = std::reduce(whitePixels.begin(), whitePixels.end());
-
-    // or faster = parallel version, with automatic multi-threading
-    cv::Point2f whiteAccum = std::reduce(std::execution::par_unseq, whitePixels.begin(), whitePixels.end());
-
-    // Divide by whiteCnt to get average, ie. centroid (only if whiteCnt != 0 !!!)
-    cv::Point2f centroid_absolute = whiteAccum / whiteCnt;
-    // Compute NORMALIZED coordinates
-    cv::Point2f centroid_normalized = { centroid_absolute.x / frame.cols, centroid_absolute.y / frame.rows };
-
-    return centroid_normalized;
-}
-
-// https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB_alternative
-void App::hsv2rgb(float h, float s, float v, float& r, float& g, float& b)
-{
-    auto f = [&](uint n) {
-        auto k = [=]() { return fmod(n + h / 60, 6); };
-        return v - v * s * std::fmax(0, std::min(k(), std::min(4 - k(), 1.0)));
-        };
-    r = f(5); g = f(3); b = f(1);
 }
 
 void App::update_projection_matrix(void)
@@ -778,4 +610,230 @@ GLFWmonitor* App::get_current_monitor(GLFWwindow* window)
 
 	return best_monitor;
 
+}
+
+void App::take_screenshot(){
+    glReadPixels(0, 0, screenshot.cols, screenshot.rows, GL_BGR, GL_UNSIGNED_BYTE, screenshot.data);
+    cv::flip(screenshot, screenshot, 0);
+    auto screenshot_now = std::chrono::system_clock::now();
+    auto screenshot_time_t = std::chrono::system_clock::to_time_t(screenshot_now);
+    std::stringstream filename;
+    filename << "../screenshots/" + std::string(SCREENSHOT_FILE_NAME) + '_';
+    filename << std::put_time(std::localtime(&screenshot_time_t), SCREENSHOT_TIMESTAMP_FORMAT);
+    filename << ".jpg";
+    cv::imwrite(filename.str().c_str(), screenshot);
+}
+
+int App::computeWebcamSize()
+{
+    int base_size = static_cast<int>(std::min(viewport_width, viewport_height) * WEBCAM_SCALE_FACTOR);
+    return base_size;
+}
+
+
+void App::check_gl_version()
+{
+    GLint gl_version_major, gl_version_minor;
+    glGetIntegerv(GL_MAJOR_VERSION, &gl_version_major);
+    glGetIntegerv(GL_MINOR_VERSION, &gl_version_minor);
+
+    if (gl_version_major != 4 || gl_version_minor != 6)
+    {
+        throw std::runtime_error("We're not using requested OpenGL version!");
+    }
+}
+
+void App::print_opencv_info()
+{
+    std::cout << "Capture capabilities:"
+        << " width = " << capture.get(cv::CAP_PROP_FRAME_WIDTH)
+        << ", height = " << capture.get(cv::CAP_PROP_FRAME_HEIGHT)
+        << '\n';
+}
+
+void App::print_glfw_info()
+{
+    std::cout << "GLFW version: " << glfwGetVersionString() << '\n';
+}
+
+void App::print_glm_info()
+{
+    std::cout << "GLM version: " << GLM_VERSION_MAJOR << '.' << GLM_VERSION_MINOR << '.'
+        << GLM_VERSION_PATCH << "rev" << GLM_VERSION_REVISION << '\n';
+}
+
+void App::print_gl_info()
+{
+    const char* vendor = (const char*)glGetString(GL_VENDOR);
+    std::cout << "GPU vendor is: " << (vendor == nullptr ? "Unknown" : vendor) << '\n';
+
+    const char* renderer = (const char*)glGetString(GL_RENDERER);
+    std::cout << "GL renderer is: " << (renderer == nullptr ? "Unknown" : renderer) << '\n';
+
+    const char* gl_version = (const char*)glGetString(GL_VERSION);
+    std::cout << "GL version is: " << (gl_version == nullptr ? "Unknown" : gl_version) << '\n';
+
+    const char* glsl_version = (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
+    std::cout << "GLSL version is: " << (glsl_version == nullptr ? "Unknown" : glsl_version) << '\n';
+
+    GLint gl_context_profile_mask;
+    glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &gl_context_profile_mask);
+
+    if (gl_context_profile_mask & GL_CONTEXT_CORE_PROFILE_BIT) {
+        std::cout << "We are using CORE profile\n";
+    }
+    else {
+        if (gl_context_profile_mask & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT) {
+            std::cout << "We are using COMPATIBILITY profile\n";
+            throw std::runtime_error("We're not using CORE profile!");
+        }
+        else {
+            throw std::runtime_error("What??");
+        }
+    }
+
+    GLint gl_context_flags;
+    glGetIntegerv(GL_CONTEXT_FLAGS, &gl_context_flags);
+
+    if (gl_context_flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT) {
+        std::cout << "This GL context is forward compatible\n";
+    }
+    if (gl_context_flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
+        std::cout << "This GL context is a debug context\n";
+    }
+    if (gl_context_flags & GL_CONTEXT_FLAG_ROBUST_ACCESS_BIT)
+    {
+        std::cout << "This GL context supports robust memory access\n";
+    }
+    if (gl_context_flags & GL_CONTEXT_FLAG_NO_ERROR_BIT)
+    {
+        std::cout << "This GL context doesn't report errors\n";
+    }
+}
+
+
+void App::draw_crosshair()
+{
+    float cx = viewport_width * 0.5f;
+    float cy = viewport_height * 0.5f;
+    float size = 10.0f;
+
+    ImDrawList* draw_list = ImGui::GetForegroundDrawList();
+    ImU32 color = IM_COL32(255, 0, 0, 255);
+
+    draw_list->AddLine(ImVec2(cx - size, cy), ImVec2(cx + size, cy), color, 2.0f);
+    draw_list->AddLine(ImVec2(cx, cy - size), ImVec2(cx, cy + size), color, 2.0f);
+}
+
+void App::init_room_assets() {
+    float size = ROOM_SIZE;
+    float room_height = ROOM_HEIGHT;
+    float half = size * 0.5f;
+
+    float floor_uv_x = 10.0f;
+    float floor_uv_y = 10.0f;
+
+    float wall_uv_x = 10.0f;
+    float wall_uv_y = 3.0f;
+
+    float ceiling_uv_x = 10.0f;
+    float ceiling_uv_y = 10.0f;
+
+    texture_library.emplace("wall_text", std::make_shared<Texture>("../resources/textures/wall.png"));
+    texture_library.emplace("ceiling_text", std::make_shared<Texture>("../resources/textures/floor.jpg"));
+    texture_library.emplace("floor_text", std::make_shared<Texture>("../resources/textures/floor.jpg"));
+
+    mesh_library.emplace("floor_mesh", generate_quad_mesh(
+        { -half, 0.0f, -half },
+        { half, 0.0f, -half },
+        { half, 0.0f,  half },
+        { -half, 0.0f,  half },
+        { 0.0f, 1.0f, 0.0f },
+        floor_uv_x, floor_uv_y
+    ));
+    Model floor_model;
+    floor_model.addMesh(mesh_library.at("floor_mesh"), shader_library.at("text_shader"), texture_library.at("floor_text"));
+    scene.emplace("floor", std::make_shared<Model>(floor_model));
+
+    mesh_library.emplace("ceiling_mesh", generate_quad_mesh(
+        { -half, room_height, -half },
+        { -half, room_height,  half },
+        { half, room_height,  half },
+        { half, room_height, -half },
+        { 0.0f, -1.0f, 0.0f },
+        ceiling_uv_x, ceiling_uv_y
+    ));
+    Model ceiling_model;
+    ceiling_model.addMesh(mesh_library.at("ceiling_mesh"), shader_library.at("text_shader"), texture_library.at("ceiling_text"));
+    scene.emplace("ceiling", std::make_shared<Model>(ceiling_model));
+
+    mesh_library.emplace("back_wall_mesh", generate_quad_mesh(
+        { -half, 0.0f, -half },
+        { half, 0.0f, -half },
+        { half, room_height, -half },
+        { -half, room_height, -half },
+        { 0.0f, 0.0f, 1.0f },
+        wall_uv_x, wall_uv_y
+    ));
+    Model back_wall_model;
+    back_wall_model.addMesh(mesh_library.at("back_wall_mesh"), shader_library.at("text_shader"), texture_library.at("wall_text"));
+    scene.emplace("back_wall", std::make_shared<Model>(back_wall_model));
+
+    mesh_library.emplace("front_wall_mesh", generate_quad_mesh(
+        { half, 0.0f, half },
+        { -half, 0.0f, half },
+        { -half, room_height, half },
+        { half, room_height, half },
+        { 0.0f, 0.0f, -1.0f },
+        wall_uv_x, wall_uv_y
+    ));
+    Model front_wall_model;
+    front_wall_model.addMesh(mesh_library.at("front_wall_mesh"), shader_library.at("text_shader"), texture_library.at("wall_text"));
+    scene.emplace("front_wall", std::make_shared<Model>(front_wall_model));
+
+    mesh_library.emplace("left_wall_mesh", generate_quad_mesh(
+        { -half, 0.0f,  half },
+        { -half, 0.0f, -half },
+        { -half, room_height, -half },
+        { -half, room_height,  half },
+        { 1.0f, 0.0f, 0.0f },
+        wall_uv_x, wall_uv_y
+    ));
+    Model left_wall_model;
+    left_wall_model.addMesh(mesh_library.at("left_wall_mesh"), shader_library.at("text_shader"), texture_library.at("wall_text"));
+    scene.emplace("left_wall", std::make_shared<Model>(left_wall_model));
+
+    mesh_library.emplace("right_wall_mesh", generate_quad_mesh(
+        { half, 0.0f, -half },
+        { half, 0.0f,  half },
+        { half, room_height,  half },
+        { half, room_height, -half },
+        { -1.0f, 0.0f, 0.0f },
+        wall_uv_x, wall_uv_y
+    ));
+    Model right_wall_model;
+    right_wall_model.addMesh(mesh_library.at("right_wall_mesh"), shader_library.at("text_shader"), texture_library.at("wall_text"));
+    scene.emplace("right_wall", std::make_shared<Model>(right_wall_model));
+}
+
+void App::add_box_line(int count, float startX, float spacing, float y, float z) {
+    Model cubeTemplate;
+    cubeTemplate.addMesh(
+        mesh_library.at("wood_box_mesh"),
+        shader_library.at("text_shader"),
+        texture_library.at("wood_box_text")
+    );
+
+    for (int i = 0; i < count; ++i) {
+        auto box = std::make_shared<Model>(cubeTemplate);
+
+        glm::mat4 modelMatrix = glm::translate(
+            glm::mat4(1.0f),
+            glm::vec3(startX + i * spacing, y, z)
+        );
+
+        box->setModelMatrix(modelMatrix);
+
+        scene.emplace("box_" + std::to_string(i), box);
+    }
 }
