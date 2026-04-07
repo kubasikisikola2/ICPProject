@@ -7,9 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_BUILD_TYPE Debug)
 
-#set(OpenCV_DIR "C:/opencv/build/x64/vc16")
-#find_package(OpenCV REQUIRED)
-
 find_package(fmt CONFIG REQUIRED)
 find_package(glew CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
@@ -23,7 +20,8 @@ find_package(imgui CONFIG REQUIRED)
 #set(HAVE_TBB OFF CACHE BOOL "Have TBB" FORCE)
 
 if(WIN32)
-    set(OpenCV_DIR "C:/opencv/build/x64/vc16/lib")
+    set(OpenCV_DIR "$ENV{OPENCV_DIR}/x64/vc16/lib")
+    #set(OpenCV_DIR "C:/opencv/build/x64/vc16/lib")
     find_package(OpenCV CONFIG REQUIRED)
 elseif(UNIX)
     find_package(OpenCV CONFIG REQUIRED)
