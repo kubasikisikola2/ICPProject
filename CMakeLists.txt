@@ -40,7 +40,14 @@ add_executable(ICPProject1
     "src/ObjectLoader.cpp"
     "src/miniaudio.c"
     "src/AudioManager.cpp"
-    "src/Texture.cpp" "src/MeshGen.cpp" "src/GameClasses/Player.cpp" "src/GameClasses/Gun.cpp" "src/GameClasses/Target.cpp" "src/GameClasses/TargetManager.cpp")
+    "src/Texture.cpp"
+    "src/MeshGen.cpp"
+    "src/GameClasses/Player.cpp"
+    "src/GameClasses/Gun.cpp"
+    "src/GameClasses/Target.cpp"
+    "src/GameClasses/TargetManager.cpp"
+    "src/GameClasses/SmallBox.cpp"
+)
 
 target_link_libraries(ICPProject1 PRIVATE
     fmt::fmt

@@ -20,6 +20,7 @@
 #include "GameClasses/Gun.hpp"
 #include "GameClasses/Target.hpp"
 #include "GameClasses/TargetManager.hpp"
+#include "GameClasses/SmallBox.hpp"
 
 class App {
 public:
@@ -37,7 +38,7 @@ private:
     bool show_imgui{ true };
     float game_speed{ 1.0 };
     bool paused_by_key{ false };
-    bool muted{ false };
+    bool muted{ false }, music_muted{ false };
     bool game_paused{ true };
 
     GLuint shader_prog_ID{ 0 };
@@ -82,6 +83,7 @@ private:
     Player player;
     Gun gun;
     TargetManager target_manager;
+    SmallBox smol_box;
     
     std::shared_ptr<Model> muzzle_flash_model;
 

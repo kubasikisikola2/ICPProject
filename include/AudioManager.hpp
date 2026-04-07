@@ -10,6 +10,8 @@
 #include <mutex>
 #include <queue>
 
+#include "Config.hpp"
+
 class AudioManager {
 public:
 	static AudioManager& getInstance()
@@ -25,9 +27,9 @@ public:
 
 	void setListenerPosition(float x, float y, float z, float xDir, float yDir, float zDir);
 
-	bool play3D(const std::string& name, float soundX, float soundY, float soundZ);
-	bool play2D(const std::string& name);
-	bool playBGM(const std::string& name);
+	bool play3D(const std::string& name, float soundX, float soundY, float soundZ, float volume = AUDIO_DEF_VOLUME);
+	bool play2D(const std::string& name, float volume = AUDIO_DEF_VOLUME);
+	bool playBGM(const std::string& name, float volume = AUDIO_DEF_VOLUME);
 
 	void stopBGM();
 	void stopAll();

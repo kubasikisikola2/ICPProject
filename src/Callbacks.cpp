@@ -56,13 +56,27 @@ void App::glfw_key_callback(GLFWwindow* window, int key, int scancode, int actio
 		case GLFW_KEY_M:
 			if (this_inst->muted)
 			{
-				AudioManager::getInstance().playBGM("Doom");
+				if (!this_inst->music_muted) {
+					AudioManager::getInstance().playBGM("Doom", BGM_DOOM_VOLUME);
+				}
 				this_inst->muted = false;
 			}
 			else
 			{
 				AudioManager::getInstance().stopAll();
 				this_inst->muted = true;
+			}
+			break;
+		case GLFW_KEY_N:
+			if (this_inst->music_muted) {
+				if (!this_inst->muted) {
+					AudioManager::getInstance().playBGM("Doom", BGM_DOOM_VOLUME);
+				}
+				this_inst->music_muted = false;
+			}
+			else {
+				AudioManager::getInstance().stopBGM();
+				this_inst->music_muted = true;
 			}
 			break;
 		case GLFW_KEY_K:

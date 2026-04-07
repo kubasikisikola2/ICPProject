@@ -29,7 +29,8 @@
 //audio config
 #define AUDIO_MIN_DISTANCE 0.5f
 #define AUDIO_MAX_DISTANCE 100.0f
-#define AUDIO_DEF_VOLUME 2.0f
+#define AUDIO_DEF_VOLUME 1.0f
+#define BGM_DOOM_VOLUME 0.75f
 
 //mic config
 #define MIC_BUFFER_FRAMES 2048
@@ -47,3 +48,10 @@
 #define BOXES_START_X -7.0f
 #define BOXES_SPACING 1.0f
 #define BOXES_Y_POSITION 0.5f
+#define GUN_VOLUME 0.5f
+#define TARGET_HIT_VOLUME 20.0f
+
+//small box config
+#define BOX_RMS_THRESH 0.1f
+#define BOX_KNOCK_TIME 60
+#define BOX_KNOCK_VOLUME 2.0f

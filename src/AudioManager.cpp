@@ -28,7 +28,7 @@ void AudioManager::setListenerPosition(float x, float y, float z, float xDir, fl
 	ma_engine_listener_set_direction(&engine, 0, xDir, yDir, zDir);
 }
 
-bool AudioManager::play3D(const std::string& name, float soundX, float soundY, float soundZ)
+bool AudioManager::play3D(const std::string& name, float soundX, float soundY, float soundZ, float volume)
 {
 	ma_sound* original = sound_bank.at(name).get();
 	ma_sound* copy_snd = new ma_sound;
@@ -44,6 +44,7 @@ bool AudioManager::play3D(const std::string& name, float soundX, float soundY, f
 
 	ma_sound_seek_to_pcm_frame(copy_snd, 0); // seek to the beginning
 	ma_sound_set_position(copy_snd, soundX, soundY, soundZ);
+	ma_sound_set_volume(copy_snd, volume);
 
 	if (ma_sound_start(copy_snd) != MA_SUCCESS) {
 		std::cerr << "Failed to play sound: " << name << std::endl;
@@ -59,7 +60,7 @@ bool AudioManager::play3D(const std::string& name, float soundX, float soundY, f
 	return true;
 }
 
-bool AudioManager::play2D(const std::string& name)
+bool AudioManager::play2D(const std::string& name, float volume)
 {
 	ma_sound* original = sound_bank.at(name).get();
 	ma_sound* copy_snd = new ma_sound;
@@ -75,6 +76,7 @@ bool AudioManager::play2D(const std::string& name)
 
 	ma_sound_seek_to_pcm_frame(copy_snd, 0); // seek to the beginning
 	ma_sound_set_spatialization_enabled(copy_snd, false); // disable spatialization
+	ma_sound_set_volume(copy_snd, volume);
 
 	if (ma_sound_start(copy_snd) != MA_SUCCESS) {
 		std::cerr << "Failed to play sound: " << name << std::endl;
@@ -90,7 +92,7 @@ bool AudioManager::play2D(const std::string& name)
 	return true;
 }
 
-bool AudioManager::playBGM(const std::string& name)
+bool AudioManager::playBGM(const std::string& name, float volume)
 {
 	if (ma_sound_is_playing(&active_bgm))
 	{
@@ -110,6 +112,7 @@ bool AudioManager::playBGM(const std::string& name)
 	ma_sound_seek_to_pcm_frame(&active_bgm, 0); // seek to the beginning
 	ma_sound_set_spatialization_enabled(&active_bgm, false); // disable spatialization
 	ma_sound_set_looping(&active_bgm, true); // loop BGM
+	ma_sound_set_volume(&active_bgm, volume);
 
 	if (ma_sound_start(&active_bgm) != MA_SUCCESS) {
 		std::cerr << "Failed to play sound: " << name << std::endl;

@@ -147,6 +147,11 @@ void App::init_assets(void) {
     mesh_library.emplace("wood_box_mesh", mesh_wooden_box);
     add_box_line(BOXES_COUNT, BOXES_START_X, BOXES_SPACING, BOXES_Y_POSITION, BOXES_Z_POSITION);
 
+    Model smallBoxModel;
+    smallBoxModel.addMesh(mesh_library.at("wood_box_mesh"), shader_library.at("text_shader"), texture_library.at("wood_box_text"));
+    smallBoxModel.scale(glm::vec3(0.5, 0.5, 0.5));
+    scene.emplace("small_box", std::make_shared<Model>(smallBoxModel));
+
     std::vector<Vertex> vGun;
     std::vector<GLuint> iGun;
     filename = "../resources/models/gun.obj";
@@ -170,7 +175,6 @@ void App::init_assets(void) {
     mesh_library.emplace("webcam_mesh", generate_webcam_mesh());
     webcamModel.addMesh(mesh_library.at("webcam_mesh"), shader_library.at("text_shader"), texture_library.at("webcam_text"));
     scene.emplace("webcam", std::make_shared<Model>(webcamModel));
-
 
     mesh_library.emplace("muzzle_flash_mesh", generate_webcam_mesh());
     texture_library.emplace("muzzle_flash_text", std::make_shared<Texture>("../resources/textures/muzzle_flash.png"));
@@ -210,21 +214,17 @@ void App::load_music()
         {"Doom", "../resources/music/03_E1M1_At_Doom_s_Gate.mp3"},
         {"ouch", "../resources/sfx/ouch.wav"},
         {"step1", "../resources/sfx/step1.wav"},
-        {"step2", "../resources/sfx/step2.wav"}
+        {"step2", "../resources/sfx/step2.wav"},
+        {"gunshot", "../resources/sfx/gunshot.wav"},
+        {"knock", "../resources/sfx/knock.mp3"}
     };
 
-    bool success = true;
-    for (auto name_filename : name_filename_pairs)
+    for (auto& name_filename : name_filename_pairs)
     {
         if (!AudioManager::getInstance().load(name_filename.first, name_filename.second))
         {
-            success = false;
+            throw std::runtime_error("Failed to load soundfile: " + name_filename.second);
         }
-    }
-    
-    if (!success)
-    {
-        throw std::runtime_error("Failed to load one or multiple sound files");
     }
 }
 
@@ -347,12 +347,16 @@ int App::run(void)
     update_projection_matrix();
     screenshot.create(viewport_height, viewport_width, CV_8UC3);
 
-    AudioManager::getInstance().playBGM("Doom");
+    AudioManager::getInstance().playBGM("Doom", BGM_DOOM_VOLUME);
 
     player.set_floor_height(-1.0f);
     player.set_mode(PlayerMode::FirstPerson);
     gun.set_model(scene.at("gun"));
     gun.set_flash_model(muzzle_flash_model);
+    smol_box.set_knock_name("knock");
+    smol_box.set_model(scene.at("small_box"));
+    smol_box.set_position(glm::vec3(ROOM_SIZE / 2 - 0.5f, 0.25f, ROOM_SIZE / 2 - 0.5f));
+    double knock_countdown = BOX_KNOCK_TIME;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -389,7 +393,7 @@ int App::run(void)
         if (show_imgui) {
             //ImGui::ShowDemoWindow(); // Enable mouse when using Demo!
             ImGui::SetNextWindowPos(ImVec2(10, 10));
-            ImGui::SetNextWindowSize(ImVec2(250, 270)); 
+            ImGui::SetNextWindowSize(ImVec2(250, 310)); 
 
             ImGui::Begin("Info", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
             ImGui::Text("Total shots: %d", total_shots);
@@ -398,11 +402,13 @@ int App::run(void)
             ImGui::Text("Tracker FPS: %.1f", tracker_fps);
             ImGui::Text("Microphone RMS: %.3f", AudioManager::getInstance().getMicLoudness());
             ImGui::Text("V-Sync: %s", is_vsync_on ? "ON" : "OFF");
+            ImGui::Text("Game muted: %s, music muted: %s", muted ? "YES" : "NO", music_muted ? "YES" : "NO");
             ImGui::Text("RMB - release mouse");
             ImGui::Text("TAB - show/hide GUI");
             ImGui::Text("P - pause");
             ImGui::Text("F11 - toggle fullscreen");
-            ImGui::Text("M - toggle sound");
+            ImGui::Text("M - toggle sound and music");
+            ImGui::Text("N - toggle music");
             ImGui::Text("V - toggle V-Sync");
             ImGui::Text("K - toggle camera");
             ImGui::Text("ESC - close app");
@@ -420,6 +426,9 @@ int App::run(void)
         update_projection_matrix();
         glm::mat4 view_matrix = camera.GetViewMatrix();
         gun.update(delta_time, camera.Position, camera.Front, camera.Up, camera.Right);
+        smol_box.update(delta_time, camera.Position);
+        AudioManager::getInstance().setListenerPosition(camera.Position.x, camera.Position.y, camera.Position.z,
+            camera.Front.x, camera.Front.y, camera.Front.z);
 
         //draw all models from scene
         for (auto &model : scene) {
@@ -433,6 +442,11 @@ int App::run(void)
             muzzle_flash_model->draw(view_matrix, projection_matrix);
         }
 
+        knock_countdown -= delta_time;
+        if (knock_countdown <= 0.0f) {
+            knock_countdown = BOX_KNOCK_TIME;
+            smol_box.knock();
+        }
         
         target_manager.draw_targets(view_matrix, projection_matrix, now);
         draw_webcam();
@@ -473,14 +487,18 @@ void App::shoot()
 {
     glm::vec3 rayOrigin = camera.Position;
     glm::vec3 rayDir = glm::normalize(camera.Front);
-    glm::vec3 taget_hit_position;
+    glm::vec3 target_hit_position;
     total_shots++;
 
-    if (target_manager.shot_fired(rayOrigin, rayDir, &taget_hit_position))
+    if (!muted)
+    {
+        AudioManager::getInstance().play2D("gunshot", GUN_VOLUME);
+    }
+    if (target_manager.shot_fired(rayOrigin, rayDir, &target_hit_position))
     {
         //play positional audio
         if (!muted) {
-            AudioManager::getInstance().play2D("ouch");
+            AudioManager::getInstance().play3D("ouch", target_hit_position.x, target_hit_position.y, target_hit_position.z, TARGET_HIT_VOLUME);
         }
         total_hits++;
     }
